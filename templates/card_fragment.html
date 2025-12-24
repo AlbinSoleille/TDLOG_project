@@ -1,24 +1,45 @@
-<div class="scene" x-data="{ retournee: false }" style="cursor: pointer;">
-    
-    <div class="card-object" 
-         @click="retournee = !retournee" 
-         :class="{ 'is-flipped': retournee }">
-        
-        <div class="card-face card-front">
-            <div>
-                <small class="text-muted text-uppercase fw-bold">Question</small>
-                <hr class="my-2 w-50 mx-auto">
-                {{ carte.question }}
-            </div>
-        </div>
+<div class="d-flex flex-column align-items-center" x-data="{ retournee: false }">
 
-        <div class="card-face card-back">
-            <div>
-                <small class="text-uppercase fw-bold" style="opacity: 0.8">Réponse</small>
-                <hr class="my-2 w-50 mx-auto border-white">
-                {{ carte.reponse }}
+    <div class="scene mb-4" style="cursor: pointer;" @click="retournee = !retournee">
+        <div class="card-object" :class="{ 'is-flipped': retournee }">
+            
+            <div class="card-face card-front">
+                <div>
+                    <small class="text-muted text-uppercase fw-bold">Question</small>
+                    <hr class="my-2 w-50 mx-auto">
+                    {{ carte.question }}
+                </div>
             </div>
+
+            <div class="card-face card-back">
+                <div>
+                    <small class="text-uppercase fw-bold" style="opacity: 0.8">Réponse</small>
+                    <hr class="my-2 w-50 mx-auto border-white">
+                    {{ carte.reponse }}
+                </div>
+            </div>
+
         </div>
+    </div>
+
+    <div class="d-flex gap-3" x-show="retournee" x-transition style="display: none;">
+        
+        <button class="btn btn-outline-danger btn-lg rounded-pill px-4"
+                hx-get="{{ url_for('vote_card', result='nok', question=carte.question) }}"
+                hx-target="#zone-carte"
+                hx-swap="innerHTML">
+            ❌ Je ne savais pas
+        </button>
+
+        <button class="btn btn-success btn-lg rounded-pill px-4"
+                hx-get="{{ url_for('vote_card', result='ok', question=carte.question) }}"
+                hx-target="#zone-carte"
+                hx-swap="innerHTML">
+            ✅ Je savais !
+        </button>
 
     </div>
+    
+    <p class="text-muted mt-3" x-show="!retournee">👆 Touche la carte pour voir la réponse</p>
+
 </div>
