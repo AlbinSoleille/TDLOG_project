@@ -40,23 +40,22 @@
             
             <a class="navbar-brand fw-bold" href="{{ url_for('cours') }}">🎓 Mon Appli</a>
 
-            <div class="d-flex gap-3">
+            <div class="d-flex gap-3 align-items-center">
                 <a class="btn {% if page == 'cours' %}btn-light text-primary{% else %}btn-outline-light{% endif %}" 
-                href="{{ url_for('cours') }}">
-                Cours
-                </a>
-
+                href="{{ url_for('cours') }}">Cours</a>
                 <a class="btn {% if page == 'flashcards' %}btn-light text-primary{% else %}btn-outline-light{% endif %}" 
-                href="{{ url_for('flashcards') }}">
-                Flashcards
-                </a>
-
+                href="{{ url_for('flashcards') }}">Flashcards</a>
                 <a class="btn {% if page == 'fiches' %}btn-light text-primary{% else %}btn-outline-light{% endif %}" 
-                href="{{ url_for('fiches') }}">
-                Fiches Révision
-                </a>
+                href="{{ url_for('fiches') }}">Fiches</a>
+                
+                {% if session.get('user') %}
+                    <div class="border-start border-white ps-3 ms-2">
+                        <a href="{{ url_for('logout') }}" class="btn btn-danger btn-sm">
+                            Déconnexion
+                        </a>
+                    </div>
+                {% endif %}
             </div>
-
         </div>
     </nav>
 

@@ -1,5 +1,7 @@
 {
-    "Que signifie HTML ?": 2,
-    "Quelle est la capitale de l'Australie ?": 1,
-    "En Python, quel mot-clé définit une fonction ?": 1
+    "yacine": {
+        "Que signifie HTML ?": 2,
+        "En Python, quel mot-clé définit une fonction ?": 1,
+        "Quelle est la capitale de l'Australie ?": 0
+    }
 }
