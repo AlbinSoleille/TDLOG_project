@@ -1,3 +1,15 @@
 venv_TDLOG_projet/
 __pycache__/
 *.pyc
+
+# SQLite database
+*.db
+flashcards.db
+
+# JSON backups
+json_backup/
+
+# Tests
+.coverage
+htmlcov/
+flashcards.db.backup_*

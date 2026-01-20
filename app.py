@@ -1,5 +1,4 @@
 import os
-import json
 import csv
 import random
 from functools import wraps
@@ -8,13 +7,28 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from PyPDF2 import PdfReader
 from openai import OpenAI
 
+# Importer les fonctions de la base de données
+from database import (
+    init_database, get_user_by_username, create_user,
+    get_all_decks, get_deck_by_name, create_deck,
+    get_flashcards_by_deck, create_flashcard,
+    get_all_user_progress, update_progress, get_user_progress
+)
+
+# Importer l'algorithme Anki
+from anki_algorithm import AnkiCard, calculate_next_review
+from datetime import datetime
+
 app = Flask(__name__)
 app.secret_key = 'CLE_SECRETE_A_CHANGER'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# On définit le dossier où chercher les CSV (theoj.csv, etc.)
+# Dossier pour les flashcards CSV (pour la génération depuis PDF)
 FLASHCARDS_DIR = os.path.join(BASE_DIR, 'flashcards_data')
 os.makedirs(FLASHCARDS_DIR, exist_ok=True)
+
+# Initialiser la base de données au démarrage
+init_database()
 
 # --- SECURITE ---
 def login_required(f):
@@ -24,101 +38,6 @@ def login_required(f):
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
-
-# --- GESTION UTILISATEURS ---
-def charger_users():
-    path = os.path.join(BASE_DIR, 'users.json')
-    if os.path.exists(path):
-        with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return {}
-
-def sauver_users(users):
-    path = os.path.join(BASE_DIR, 'users.json')
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump(users, f, indent=4)
-
-# --- GESTION FLASHCARDS (MULTI-FICHIERS) ---
-
-def lister_decks():
-    """Scan le dossier pour trouver theoj.csv et les autres"""
-    if not os.path.exists(FLASHCARDS_DIR):
-        return []
-    # On ne garde que les fichiers .csv
-    files = [f for f in os.listdir(FLASHCARDS_DIR) if f.lower().endswith('.csv')]
-    return files
-
-def charger_deck_csv(deck_filename):
-    """Lit le contenu d'un fichier CSV spécifique"""
-    path = os.path.join(FLASHCARDS_DIR, deck_filename)
-    cartes = []
-    if os.path.exists(path):
-        try:
-            with open(path, 'r', encoding='utf-8', newline='') as csvfile:
-                # Détection automatique du séparateur (virgule ou point-virgule)
-                dialect = csv.Sniffer().sniff(csvfile.read(1024))
-                csvfile.seek(0)
-                reader = csv.reader(csvfile, dialect)
-                
-                for row in reader:
-                    # On prend les lignes qui ont au moins 2 colonnes (Question, Réponse)
-                    if len(row) >= 2:
-                        cartes.append({'question': row[0], 'reponse': row[1]})
-        except Exception as e:
-            print(f"Erreur de lecture {deck_filename}: {e}")
-    return cartes
-
-def charger_progression(deck_name):
-    """Charge les scores de l'utilisateur pour CE fichier précis"""
-    user = session['user']
-    path_progress = os.path.join(BASE_DIR, 'user_progress.json')
-    
-    global_progress = {}
-    if os.path.exists(path_progress):
-        with open(path_progress, 'r', encoding='utf-8') as f:
-            global_progress = json.load(f)
-    
-    # Structure : { "Yacine": { "theoj.csv": { "Question...": Score } } }
-    user_data = global_progress.get(user, {})
-    deck_progress = user_data.get(deck_name, {})
-    
-    return deck_progress, global_progress
-
-def sauvegarder_score_csv(deck_name, question, est_connu):
-    user = session['user']
-    deck_progress, global_progress = charger_progression(deck_name)
-    
-    score_actuel = deck_progress.get(question, 0)
-    
-    if est_connu:
-        nouveau_score = min(score_actuel + 1, 5)
-    else:
-        nouveau_score = 0
-        
-    # Mise à jour
-    deck_progress[question] = nouveau_score
-    
-    # On sauvegarde tout
-    if user not in global_progress:
-        global_progress[user] = {}
-    global_progress[user][deck_name] = deck_progress
-    
-    path_progress = os.path.join(BASE_DIR, 'user_progress.json')
-    with open(path_progress, 'w', encoding='utf-8') as f:
-        json.dump(global_progress, f, ensure_ascii=False, indent=4)
-
-def piocher_carte_csv(deck_name):
-    cartes = charger_deck_csv(deck_name)
-    if not cartes: return None
-
-    deck_progress, _ = charger_progression(deck_name)
-
-    poids = []
-    for c in cartes:
-        score = deck_progress.get(c['question'], 0)
-        poids.append(10 / (score + 1))
-
-    return random.choices(cartes, weights=poids, k=1)[0]
 
 # --- GENERATION FLASHCARDS DEPUIS PDF ---
 
@@ -188,18 +107,79 @@ Quelle est la formule de la variance ?;;;$Var(X) = E[(X - E[X])^2] = E[X^2] - (E
     except Exception as e:
         return None, f"Erreur lors de la génération: {str(e)}"
 
-def sauvegarder_flashcards_csv(flashcards, nom_fichier):
-    """Sauvegarde les flashcards générées dans un fichier CSV"""
+def sauvegarder_flashcards_db(flashcards, nom_deck):
+    """Sauvegarde les flashcards générées dans la base de données"""
     try:
-        path = os.path.join(FLASHCARDS_DIR, nom_fichier)
-        with open(path, 'w', encoding='utf-8', newline='') as csvfile:
-            writer = csv.writer(csvfile, delimiter=';')
-            for card in flashcards:
-                writer.writerow([card['question'], card['reponse']])
+        # Créer ou récupérer le deck
+        deck_id = create_deck(nom_deck)
+
+        # Ajouter les flashcards
+        for card in flashcards:
+            create_flashcard(deck_id, card['question'], card['reponse'])
+
         return True
     except Exception as e:
-        print(f"Erreur lors de la sauvegarde du CSV: {e}")
+        print(f"Erreur lors de la sauvegarde dans la DB: {e}")
         return False
+
+# --- GESTION DES FLASHCARDS ---
+
+def piocher_carte(deck_name, user_id):
+    """Pioche une carte selon l'algorithme Anki (cartes dues en priorité)"""
+    deck = get_deck_by_name(deck_name)
+    if not deck:
+        return None
+
+    # Récupérer toutes les flashcards avec leur progression
+    cartes_progress = get_all_user_progress(user_id, deck['id'])
+
+    if not cartes_progress:
+        return None
+
+    now = datetime.now()
+
+    # Filtrer les cartes à réviser
+    cartes_a_reviser = []
+    for carte in cartes_progress:
+        # Nouvelle carte (pas de progression)
+        if carte['due_date'] is None:
+            cartes_a_reviser.append((carte, 0))  # Priorité max
+        else:
+            # Carte existante
+            due_date = datetime.fromisoformat(carte['due_date'])
+            if due_date <= now:
+                # Carte due
+                delay = (now - due_date).total_seconds() / 3600  # En heures
+                cartes_a_reviser.append((carte, delay))
+
+    # S'il n'y a pas de cartes à réviser, on prend les prochaines cartes
+    if not cartes_a_reviser:
+        for carte in cartes_progress:
+            if carte['due_date'] is not None:
+                due_date = datetime.fromisoformat(carte['due_date'])
+                delay = -(due_date - now).total_seconds() / 3600  # Négatif = futur
+                cartes_a_reviser.append((carte, delay))
+
+    if not cartes_a_reviser:
+        return None
+
+    # Trier par priorité (nouvelles cartes d'abord, puis cartes en retard)
+    cartes_a_reviser.sort(key=lambda x: x[1], reverse=True)
+
+    # Prendre la carte la plus prioritaire
+    carte = cartes_a_reviser[0][0]
+
+    return {
+        'id': carte['id'],
+        'question': carte['question'],
+        'reponse': carte['answer'],
+        'ease_factor': carte['ease_factor'],
+        'interval': carte['interval'],
+        'due_date': carte['due_date'],
+        'step': carte['step'],
+        'is_learning': carte['is_learning'],
+        'repetitions': carte['repetitions']
+    }
 
 # --- ROUTES AUTHENTIFICATION ---
 
@@ -208,20 +188,23 @@ def login():
     # Si déjà connecté, rediriger vers cours
     if 'user' in session:
         return redirect(url_for('cours'))
-    
+
     if request.method == 'POST':
         username = request.form.get('username', '').strip().lower()
         password = request.form.get('password', '')
-        users = charger_users()
-        
+
         if not username or not password:
             flash("Veuillez remplir tous les champs")
-        elif username in users and check_password_hash(users[username], password):
-            session['user'] = username
-            return redirect(url_for('cours'))
         else:
-            flash("Identifiant ou mot de passe incorrect")
-    
+            user = get_user_by_username(username)
+
+            if user and check_password_hash(user['password_hash'], password):
+                session['user'] = username
+                session['user_id'] = user['id']
+                return redirect(url_for('cours'))
+            else:
+                flash("Identifiant ou mot de passe incorrect")
+
     return render_template('login.html')
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -229,13 +212,12 @@ def register():
     # Si déjà connecté, rediriger vers cours
     if 'user' in session:
         return redirect(url_for('cours'))
-    
+
     if request.method == 'POST':
         username = request.form.get('username', '').strip().lower()
         password = request.form.get('password', '')
         password_confirm = request.form.get('password_confirm', '')
-        users = charger_users()
-        
+
         # Validations
         if not username or not password:
             flash("Veuillez remplir tous les champs")
@@ -245,20 +227,22 @@ def register():
             flash("Le mot de passe doit contenir au moins 4 caractères")
         elif password != password_confirm:
             flash("Les mots de passe ne correspondent pas")
-        elif username in users:
+        elif get_user_by_username(username):
             flash("Cet identifiant est déjà pris")
         else:
             # Création du compte
-            users[username] = generate_password_hash(password)
-            sauver_users(users)
+            password_hash = generate_password_hash(password)
+            user_id = create_user(username, password_hash)
             session['user'] = username
+            session['user_id'] = user_id
             return redirect(url_for('cours'))
-    
+
     return render_template('register.html')
 
 @app.route('/logout')
 def logout():
     session.pop('user', None)
+    session.pop('user_id', None)
     return redirect(url_for('login'))
 
 @app.route('/')
@@ -297,35 +281,73 @@ def fiches():
 @app.route('/flashcards')
 @login_required
 def flashcards_menu():
-    """Affiche la liste des decks (dont theoj.csv)"""
-    decks = lister_decks()
-    return render_template('flashcards_menu.html', decks=decks, page='flashcards')
+    """Affiche la liste des decks"""
+    decks = get_all_decks()
+    # Convertir les Row en dictionnaires pour le template
+    decks_list = [{'id': d['id'], 'name': d['name']} for d in decks]
+    return render_template('flashcards_menu.html', decks=decks_list, page='flashcards')
 
 @app.route('/flashcards/play')
 @login_required
 def flashcards_play():
-    """Lance le jeu sur le fichier choisi"""
+    """Lance le jeu sur le deck choisi"""
     deck_name = request.args.get('deck')
     # Si aucun deck choisi, retour au menu
     if not deck_name:
         return redirect(url_for('flashcards_menu'))
-        
-    carte = piocher_carte_csv(deck_name)
+
+    user_id = session.get('user_id')
+    carte = piocher_carte(deck_name, user_id)
     return render_template('flashcards.html', page='flashcards', carte=carte, current_deck=deck_name)
 
 @app.route('/flashcards/vote')
 @login_required
 def vote_card():
-    # On récupère les infos (Deck + Question + Résultat)
+    """Traite la réponse de l'utilisateur selon l'algorithme Anki"""
+    # On récupère les infos
     deck_name = request.args.get('deck')
-    question = request.args.get('question')
-    resultat = request.args.get('result')
+    flashcard_id = request.args.get('flashcard_id')
+    rating = request.args.get('rating')  # 0=Again, 1=Hard, 2=Good, 3=Easy
+    user_id = session.get('user_id')
 
-    # On sauvegarde
-    sauvegarder_score_csv(deck_name, question, (resultat == 'ok'))
+    if flashcard_id and deck_name and rating is not None:
+        flashcard_id = int(flashcard_id)
+        rating = int(rating)
 
-    # On pioche la suivante
-    nouvelle_carte = piocher_carte_csv(deck_name)
+        # Récupérer la progression actuelle
+        progress = get_user_progress(user_id, flashcard_id)
+
+        # Créer l'objet AnkiCard
+        if progress:
+            card = AnkiCard(
+                ease_factor=progress['ease_factor'],
+                interval=progress['interval'],
+                due_date=datetime.fromisoformat(progress['due_date']) if progress['due_date'] else None,
+                step=progress['step'],
+                is_learning=bool(progress['is_learning']),
+                repetitions=progress['repetitions']
+            )
+        else:
+            # Nouvelle carte
+            card = AnkiCard()
+
+        # Calculer le prochain intervalle avec l'algorithme Anki
+        new_card = calculate_next_review(card, rating)
+
+        # Sauvegarder la nouvelle progression
+        update_progress(
+            user_id,
+            flashcard_id,
+            new_card.ease_factor,
+            new_card.interval,
+            new_card.due_date.isoformat(),
+            new_card.step,
+            1 if new_card.is_learning else 0,
+            new_card.repetitions
+        )
+
+    # Piocher la carte suivante
+    nouvelle_carte = piocher_carte(deck_name, user_id)
     return render_template('card_fragment.html', carte=nouvelle_carte, current_deck=deck_name)
 
 # --- ROUTE GENERATION FLASHCARDS DEPUIS PDF ---
@@ -382,13 +404,12 @@ def generer_flashcards_from_pdf():
                 'error': 'Aucune flashcard générée'
             }), 500
 
-        # Sauvegarde dans un fichier CSV
-        nom_fichier_csv = nom_deck if nom_deck.endswith('.csv') else f"{nom_deck}.csv"
-        if sauvegarder_flashcards_csv(flashcards, nom_fichier_csv):
+        # Sauvegarde dans la base de données SQLite
+        if sauvegarder_flashcards_db(flashcards, nom_deck):
             return jsonify({
                 'success': True,
                 'message': f'{len(flashcards)} flashcards générées avec succès',
-                'deck_name': nom_fichier_csv,
+                'deck_name': nom_deck,
                 'nb_flashcards': len(flashcards)
             })
         else:
