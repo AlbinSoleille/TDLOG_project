@@ -19,23 +19,53 @@
         </div>
     </div>
 
-    <div class="d-flex gap-3" x-show="retournee" x-transition style="display: none;">
+    <!-- Boutons système Anki : Again, Hard, Good, Easy -->
+    <div class="d-flex flex-wrap gap-2 justify-content-center" x-show="retournee" x-transition style="display: none;">
         
-        <button class="btn btn-outline-danger btn-lg rounded-pill px-4"
-                hx-get="{{ url_for('vote_card', result='nok', question=carte.question, deck=current_deck) }}"
+        <!-- Again (0) - Rouge -->
+        <button class="btn btn-danger btn-sm px-3"
+                hx-get="{{ url_for('vote_card', rating=0, flashcard_id=carte.id, deck=current_deck) }}"
                 hx-target="#zone-carte"
-                hx-swap="innerHTML">
-            ❌ Pas su
+                hx-swap="innerHTML"
+                title="Recommencer l'apprentissage">
+            <span class="d-none d-md-inline">❌ Recommencer</span>
+            <span class="d-md-none">❌</span>
         </button>
 
-        <button class="btn btn-success btn-lg rounded-pill px-4"
-                hx-get="{{ url_for('vote_card', result='ok', question=carte.question, deck=current_deck) }}"
+        <!-- Hard (1) - Orange -->
+        <button class="btn btn-warning btn-sm px-3"
+                hx-get="{{ url_for('vote_card', rating=1, flashcard_id=carte.id, deck=current_deck) }}"
                 hx-target="#zone-carte"
-                hx-swap="innerHTML">
-            ✅ Su !
+                hx-swap="innerHTML"
+                title="Difficile - Intervalle court">
+            <span class="d-none d-md-inline">😓 Difficile</span>
+            <span class="d-md-none">😓</span>
+        </button>
+
+        <!-- Good (2) - Vert -->
+        <button class="btn btn-success btn-sm px-3"
+                hx-get="{{ url_for('vote_card', rating=2, flashcard_id=carte.id, deck=current_deck) }}"
+                hx-target="#zone-carte"
+                hx-swap="innerHTML"
+                title="Bon - Intervalle normal">
+            <span class="d-none d-md-inline">✅ Bon</span>
+            <span class="d-md-none">✅</span>
+        </button>
+
+        <!-- Easy (3) - Bleu -->
+        <button class="btn btn-primary btn-sm px-3"
+                hx-get="{{ url_for('vote_card', rating=3, flashcard_id=carte.id, deck=current_deck) }}"
+                hx-target="#zone-carte"
+                hx-swap="innerHTML"
+                title="Facile - Intervalle long">
+            <span class="d-none d-md-inline">😊 Facile</span>
+            <span class="d-md-none">😊</span>
         </button>
 
     </div>
     
-    <p class="text-muted mt-3" x-show="!retournee">👆 Clique pour retourner</p>
+    <p class="text-muted mt-3 small" x-show="!retournee">👆 Clique pour retourner et choisir ta réponse</p>
+    <p class="text-muted mt-2 small" x-show="retournee" style="display: none;">
+        <strong>Astuce:</strong> Choisis selon ta maîtrise (Anki adaptera l'intervalle)
+    </p>
 </div>

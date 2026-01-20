@@ -228,29 +228,50 @@ def get_user_progress(user_id, flashcard_id):
         return cursor.fetchone()
 
 
-def update_progress(user_id, flashcard_id, score):
-    """Met à jour ou crée la progression d'un utilisateur"""
+def update_progress(user_id, flashcard_id, ease_factor, interval, due_date,
+                   step, is_learning, repetitions):
+    """Met à jour ou crée la progression d'un utilisateur (système Anki)"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO user_progress (user_id, flashcard_id, score, last_reviewed)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            INSERT INTO user_progress
+                (user_id, flashcard_id, ease_factor, interval, due_date,
+                 step, is_learning, repetitions, last_reviewed)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(user_id, flashcard_id)
-            DO UPDATE SET score = ?, last_reviewed = CURRENT_TIMESTAMP
-        ''', (user_id, flashcard_id, score, score))
+            DO UPDATE SET
+                ease_factor = ?,
+                interval = ?,
+                due_date = ?,
+                step = ?,
+                is_learning = ?,
+                repetitions = ?,
+                last_reviewed = CURRENT_TIMESTAMP
+        ''', (user_id, flashcard_id, ease_factor, interval, due_date,
+              step, is_learning, repetitions,
+              ease_factor, interval, due_date, step, is_learning, repetitions))
 
 
 def get_all_user_progress(user_id, deck_id):
-    """Récupère toute la progression d'un utilisateur pour un deck"""
+    """Récupère toute la progression d'un utilisateur pour un deck (système Anki)"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT f.id, f.question, f.answer, COALESCE(up.score, 0) as score
+            SELECT
+                f.id, f.question, f.answer,
+                up.ease_factor, up.interval, up.due_date,
+                up.step, up.is_learning, up.repetitions
             FROM flashcards f
             LEFT JOIN user_progress up
                 ON f.id = up.flashcard_id AND up.user_id = ?
             WHERE f.deck_id = ?
-            ORDER BY f.id
+            ORDER BY
+                CASE
+                    WHEN up.due_date IS NULL THEN 0
+                    WHEN up.due_date <= datetime('now') THEN 1
+                    ELSE 2
+                END,
+                up.due_date
         ''', (user_id, deck_id))
         return cursor.fetchall()
 

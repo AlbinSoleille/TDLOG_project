@@ -12,8 +12,12 @@ from database import (
     init_database, get_user_by_username, create_user,
     get_all_decks, get_deck_by_name, create_deck,
     get_flashcards_by_deck, create_flashcard,
-    get_all_user_progress, update_progress
+    get_all_user_progress, update_progress, get_user_progress
 )
+
+# Importer l'algorithme Anki
+from anki_algorithm import AnkiCard, calculate_next_review
+from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = 'CLE_SECRETE_A_CHANGER'
@@ -121,7 +125,7 @@ def sauvegarder_flashcards_db(flashcards, nom_deck):
 # --- GESTION DES FLASHCARDS ---
 
 def piocher_carte(deck_name, user_id):
-    """Pioche une carte aléatoire en fonction du score de l'utilisateur"""
+    """Pioche une carte selon l'algorithme Anki (cartes dues en priorité)"""
     deck = get_deck_by_name(deck_name)
     if not deck:
         return None
@@ -132,22 +136,50 @@ def piocher_carte(deck_name, user_id):
     if not cartes_progress:
         return None
 
-    # Calculer les poids en fonction du score
-    poids = []
-    cartes = []
+    now = datetime.now()
 
+    # Filtrer les cartes à réviser
+    cartes_a_reviser = []
     for carte in cartes_progress:
-        score = carte['score']
-        # Plus le score est élevé, moins la carte a de chances d'être piochée
-        poids.append(10 / (score + 1))
-        cartes.append({
-            'id': carte['id'],
-            'question': carte['question'],
-            'reponse': carte['answer']
-        })
+        # Nouvelle carte (pas de progression)
+        if carte['due_date'] is None:
+            cartes_a_reviser.append((carte, 0))  # Priorité max
+        else:
+            # Carte existante
+            due_date = datetime.fromisoformat(carte['due_date'])
+            if due_date <= now:
+                # Carte due
+                delay = (now - due_date).total_seconds() / 3600  # En heures
+                cartes_a_reviser.append((carte, delay))
 
-    # Piocher une carte aléatoire pondérée
-    return random.choices(cartes, weights=poids, k=1)[0]
+    # S'il n'y a pas de cartes à réviser, on prend les prochaines cartes
+    if not cartes_a_reviser:
+        for carte in cartes_progress:
+            if carte['due_date'] is not None:
+                due_date = datetime.fromisoformat(carte['due_date'])
+                delay = -(due_date - now).total_seconds() / 3600  # Négatif = futur
+                cartes_a_reviser.append((carte, delay))
+
+    if not cartes_a_reviser:
+        return None
+
+    # Trier par priorité (nouvelles cartes d'abord, puis cartes en retard)
+    cartes_a_reviser.sort(key=lambda x: x[1], reverse=True)
+
+    # Prendre la carte la plus prioritaire
+    carte = cartes_a_reviser[0][0]
+
+    return {
+        'id': carte['id'],
+        'question': carte['question'],
+        'reponse': carte['answer'],
+        'ease_factor': carte['ease_factor'],
+        'interval': carte['interval'],
+        'due_date': carte['due_date'],
+        'step': carte['step'],
+        'is_learning': carte['is_learning'],
+        'repetitions': carte['repetitions']
+    }
 
 # --- ROUTES AUTHENTIFICATION ---
 
@@ -271,37 +303,50 @@ def flashcards_play():
 @app.route('/flashcards/vote')
 @login_required
 def vote_card():
-    # On récupère les infos (Deck + Flashcard ID + Résultat)
+    """Traite la réponse de l'utilisateur selon l'algorithme Anki"""
+    # On récupère les infos
     deck_name = request.args.get('deck')
     flashcard_id = request.args.get('flashcard_id')
-    resultat = request.args.get('result')
+    rating = request.args.get('rating')  # 0=Again, 1=Hard, 2=Good, 3=Easy
     user_id = session.get('user_id')
 
-    if flashcard_id and deck_name:
+    if flashcard_id and deck_name and rating is not None:
         flashcard_id = int(flashcard_id)
+        rating = int(rating)
 
-        # Récupérer le deck pour obtenir la progression
-        deck = get_deck_by_name(deck_name)
-        if deck:
-            # Récupérer la progression actuelle
-            progress_data = get_all_user_progress(user_id, deck['id'])
-            current_score = 0
+        # Récupérer la progression actuelle
+        progress = get_user_progress(user_id, flashcard_id)
 
-            for p in progress_data:
-                if p['id'] == flashcard_id:
-                    current_score = p['score']
-                    break
+        # Créer l'objet AnkiCard
+        if progress:
+            card = AnkiCard(
+                ease_factor=progress['ease_factor'],
+                interval=progress['interval'],
+                due_date=datetime.fromisoformat(progress['due_date']) if progress['due_date'] else None,
+                step=progress['step'],
+                is_learning=bool(progress['is_learning']),
+                repetitions=progress['repetitions']
+            )
+        else:
+            # Nouvelle carte
+            card = AnkiCard()
 
-            # Calculer le nouveau score
-            if resultat == 'ok':
-                nouveau_score = min(current_score + 1, 5)
-            else:
-                nouveau_score = 0
+        # Calculer le prochain intervalle avec l'algorithme Anki
+        new_card = calculate_next_review(card, rating)
 
-            # Sauvegarder la progression
-            update_progress(user_id, flashcard_id, nouveau_score)
+        # Sauvegarder la nouvelle progression
+        update_progress(
+            user_id,
+            flashcard_id,
+            new_card.ease_factor,
+            new_card.interval,
+            new_card.due_date.isoformat(),
+            new_card.step,
+            1 if new_card.is_learning else 0,
+            new_card.repetitions
+        )
 
-    # On pioche la suivante
+    # Piocher la carte suivante
     nouvelle_carte = piocher_carte(deck_name, user_id)
     return render_template('card_fragment.html', carte=nouvelle_carte, current_deck=deck_name)
 
