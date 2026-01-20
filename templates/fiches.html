@@ -5,6 +5,9 @@
     <div class="row justify-content-center">
         <div class="col-md-8 col-lg-6"> <h1 class="text-center mb-4 mt-2">Fiches résumées 📄</h1>
 
+            <!-- Alert pour les messages -->
+            <div id="alertContainer"></div>
+
             <div class="card mb-4 border-primary shadow-sm">
                 <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                     <span>🏛️ Documents Officiels</span>
@@ -17,7 +20,7 @@
                         </div>
                     {% else %}
                         {% for fichier in originaux %}
-                            <a href="{{ url_for('static', filename='pdfs/fiches/originaux/' + fichier) }}" 
+                            <a href="{{ url_for('static', filename='pdfs/fiches/originaux/' + fichier) }}"
                                class="list-group-item list-group-item-action py-3" target="_blank">
                                 <div class="d-flex align-items-center">
                                     <span class="fs-4 me-3">📄</span>
@@ -51,16 +54,24 @@
                         </div>
                     {% else %}
                         {% for fichier in uploads %}
-                            <a href="{{ url_for('static', filename='pdfs/fiches/uploads/' + fichier) }}" 
-                               class="list-group-item list-group-item-action py-3" target="_blank">
+                            <div class="list-group-item py-3">
                                 <div class="d-flex align-items-center justify-content-between w-100">
-                                    <div class="d-flex align-items-center overflow-hidden">
+                                    <div class="d-flex align-items-center overflow-hidden flex-grow-1">
                                         <span class="fs-4 me-3">📂</span>
                                         <span class="text-truncate">{{ fichier }}</span>
                                     </div>
-                                    <small class="text-success fw-bold">Ouvrir</small>
+                                    <div class="d-flex gap-2">
+                                        <a href="{{ url_for('static', filename='pdfs/fiches/uploads/' + fichier) }}"
+                                           class="btn btn-sm btn-outline-success" target="_blank">
+                                            Ouvrir
+                                        </a>
+                                        <button class="btn btn-sm btn-primary"
+                                                onclick="ouvrirModalFlashcards('{{ fichier }}', 'fiches', 'uploads')">
+                                            ⚡ Générer flashcards
+                                        </button>
+                                    </div>
                                 </div>
-                            </a>
+                            </div>
                         {% endfor %}
                     {% endif %}
                 </div>
@@ -68,5 +79,159 @@
 
         </div>
     </div>
+
+    <!-- Modal pour générer les flashcards -->
+    <div class="modal fade" id="modalFlashcards" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">⚡ Générer des flashcards</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formGenererFlashcards">
+                        <input type="hidden" id="pdfFilename" name="pdfFilename">
+                        <input type="hidden" id="categorie" name="categorie">
+                        <input type="hidden" id="source" name="source">
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Fichier PDF</label>
+                            <input type="text" class="form-control" id="displayPdfName" disabled>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="nomDeck" class="form-label fw-bold">Nom du deck de flashcards</label>
+                            <input type="text" class="form-control" id="nomDeck" name="nomDeck"
+                                   placeholder="Ex: statistiques_chap1" required>
+                            <small class="text-muted">Ce nom sera utilisé pour identifier votre deck</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="nbFlashcards" class="form-label fw-bold">Nombre de flashcards</label>
+                            <input type="number" class="form-control" id="nbFlashcards" name="nbFlashcards"
+                                   value="10" min="5" max="30" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="apiKey" class="form-label fw-bold">Clé API OpenAI</label>
+                            <input type="password" class="form-control" id="apiKey" name="apiKey"
+                                   placeholder="sk-..." required>
+                            <small class="text-muted">
+                                Votre clé API OpenAI. Elle ne sera pas sauvegardée.
+                                <a href="https://platform.openai.com/api-keys" target="_blank">Obtenir une clé</a>
+                            </small>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="button" class="btn btn-primary" onclick="genererFlashcards()" id="btnGenerer">
+                        <span id="btnText">Générer</span>
+                        <span id="btnSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let modalFlashcards;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            modalFlashcards = new bootstrap.Modal(document.getElementById('modalFlashcards'));
+        });
+
+        function ouvrirModalFlashcards(filename, categorie, source) {
+            document.getElementById('pdfFilename').value = filename;
+            document.getElementById('categorie').value = categorie;
+            document.getElementById('source').value = source;
+            document.getElementById('displayPdfName').value = filename;
+
+            // Suggérer un nom de deck basé sur le nom du fichier
+            const nomSuggere = filename.replace('.pdf', '').toLowerCase()
+                .replace(/[^a-z0-9]/g, '_');
+            document.getElementById('nomDeck').value = nomSuggere;
+
+            modalFlashcards.show();
+        }
+
+        function afficherMessage(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.role = 'alert';
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.getElementById('alertContainer').appendChild(alertDiv);
+
+            // Auto-dismiss après 5 secondes
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+
+        async function genererFlashcards() {
+            const btnGenerer = document.getElementById('btnGenerer');
+            const btnText = document.getElementById('btnText');
+            const btnSpinner = document.getElementById('btnSpinner');
+
+            // Récupération des valeurs
+            const pdfFilename = document.getElementById('pdfFilename').value;
+            const categorie = document.getElementById('categorie').value;
+            const source = document.getElementById('source').value;
+            const nomDeck = document.getElementById('nomDeck').value.trim();
+            const nbFlashcards = document.getElementById('nbFlashcards').value;
+            const apiKey = document.getElementById('apiKey').value.trim();
+
+            if (!nomDeck || !apiKey) {
+                afficherMessage('Veuillez remplir tous les champs', 'warning');
+                return;
+            }
+
+            // Désactiver le bouton et afficher le spinner
+            btnGenerer.disabled = true;
+            btnText.classList.add('d-none');
+            btnSpinner.classList.remove('d-none');
+
+            try {
+                const response = await fetch('/api/generer-flashcards', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        pdf_filename: pdfFilename,
+                        categorie: categorie,
+                        source: source,
+                        nb_flashcards: parseInt(nbFlashcards),
+                        api_key: apiKey,
+                        nom_deck: nomDeck
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    afficherMessage(
+                        `✅ ${data.message}! Vous pouvez maintenant accéder au deck "${data.deck_name}" depuis le menu Flashcards.`,
+                        'success'
+                    );
+                    modalFlashcards.hide();
+                    // Réinitialiser le formulaire
+                    document.getElementById('formGenererFlashcards').reset();
+                } else {
+                    afficherMessage(`❌ Erreur: ${data.error}`, 'danger');
+                }
+            } catch (error) {
+                afficherMessage(`❌ Erreur réseau: ${error.message}`, 'danger');
+            } finally {
+                // Réactiver le bouton
+                btnGenerer.disabled = false;
+                btnText.classList.remove('d-none');
+                btnSpinner.classList.add('d-none');
+            }
+        }
+    </script>
 
 {% endblock %}

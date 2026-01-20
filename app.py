@@ -3,8 +3,10 @@ import json
 import csv
 import random
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
+from PyPDF2 import PdfReader
+from openai import OpenAI
 
 app = Flask(__name__)
 app.secret_key = 'CLE_SECRETE_A_CHANGER'
@@ -108,15 +110,96 @@ def sauvegarder_score_csv(deck_name, question, est_connu):
 def piocher_carte_csv(deck_name):
     cartes = charger_deck_csv(deck_name)
     if not cartes: return None
-    
+
     deck_progress, _ = charger_progression(deck_name)
-    
+
     poids = []
     for c in cartes:
         score = deck_progress.get(c['question'], 0)
         poids.append(10 / (score + 1))
-        
+
     return random.choices(cartes, weights=poids, k=1)[0]
+
+# --- GENERATION FLASHCARDS DEPUIS PDF ---
+
+def extraire_texte_pdf(pdf_path):
+    """Extrait le texte d'un fichier PDF"""
+    try:
+        reader = PdfReader(pdf_path)
+        texte_complet = ""
+        for page in reader.pages:
+            texte_complet += page.extract_text() + "\n"
+        return texte_complet
+    except Exception as e:
+        print(f"Erreur lors de l'extraction du PDF: {e}")
+        return None
+
+def generer_flashcards_via_api(texte, nb_flashcards=10, api_key=None):
+    """Génère des flashcards à partir du texte extrait en utilisant OpenAI"""
+    if not api_key:
+        return None, "Clé API OpenAI non configurée"
+
+    try:
+        client = OpenAI(api_key=api_key)
+
+        prompt = f"""Tu es un assistant pédagogique. À partir du texte suivant, génère exactement {nb_flashcards} flashcards de qualité pour aider l'étudiant à mémoriser les concepts clés.
+
+Texte du cours:
+{texte[:8000]}
+
+Règles:
+- Génère exactement {nb_flashcards} paires question/réponse
+- Les questions doivent être claires et précises
+- Les réponses doivent être concises mais complètes
+- Utilise la notation LaTeX entre $ pour les formules mathématiques (ex: $x^2$)
+- Format de réponse: une ligne par flashcard au format: QUESTION;;;REPONSE
+- Utilise EXACTEMENT trois points-virgules (;;;) comme séparateur
+
+Exemple de format attendu:
+Qu'est-ce qu'une variable aléatoire ?;;;Une fonction qui associe à chaque issue d'une expérience aléatoire un nombre réel
+Quelle est la formule de la variance ?;;;$Var(X) = E[(X - E[X])^2] = E[X^2] - (E[X])^2$"""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Tu es un assistant pédagogique expert en création de flashcards."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=2000
+        )
+
+        contenu = response.choices[0].message.content
+
+        # Parser les flashcards
+        flashcards = []
+        lignes = contenu.strip().split('\n')
+        for ligne in lignes:
+            if ';;;' in ligne:
+                parties = ligne.split(';;;')
+                if len(parties) >= 2:
+                    question = parties[0].strip()
+                    reponse = parties[1].strip()
+                    if question and reponse:
+                        flashcards.append({'question': question, 'reponse': reponse})
+
+        return flashcards, None
+
+    except Exception as e:
+        return None, f"Erreur lors de la génération: {str(e)}"
+
+def sauvegarder_flashcards_csv(flashcards, nom_fichier):
+    """Sauvegarde les flashcards générées dans un fichier CSV"""
+    try:
+        path = os.path.join(FLASHCARDS_DIR, nom_fichier)
+        with open(path, 'w', encoding='utf-8', newline='') as csvfile:
+            writer = csv.writer(csvfile, delimiter=';')
+            for card in flashcards:
+                writer.writerow([card['question'], card['reponse']])
+        return True
+    except Exception as e:
+        print(f"Erreur lors de la sauvegarde du CSV: {e}")
+        return False
 
 # --- ROUTES AUTHENTIFICATION ---
 
@@ -237,13 +320,88 @@ def vote_card():
     deck_name = request.args.get('deck')
     question = request.args.get('question')
     resultat = request.args.get('result')
-    
+
     # On sauvegarde
     sauvegarder_score_csv(deck_name, question, (resultat == 'ok'))
-    
+
     # On pioche la suivante
     nouvelle_carte = piocher_carte_csv(deck_name)
     return render_template('card_fragment.html', carte=nouvelle_carte, current_deck=deck_name)
+
+# --- ROUTE GENERATION FLASHCARDS DEPUIS PDF ---
+
+@app.route('/api/generer-flashcards', methods=['POST'])
+@login_required
+def generer_flashcards_from_pdf():
+    """Endpoint API pour générer des flashcards à partir d'un PDF"""
+    try:
+        data = request.get_json()
+
+        # Récupération des paramètres
+        pdf_filename = data.get('pdf_filename')
+        categorie = data.get('categorie', 'cours')  # 'cours' ou 'fiches'
+        source = data.get('source', 'uploads')  # 'uploads' ou 'originaux'
+        nb_flashcards = int(data.get('nb_flashcards', 10))
+        api_key = data.get('api_key')
+        nom_deck = data.get('nom_deck')
+
+        if not pdf_filename or not api_key or not nom_deck:
+            return jsonify({
+                'success': False,
+                'error': 'Paramètres manquants (pdf_filename, api_key, nom_deck requis)'
+            }), 400
+
+        # Construction du chemin du PDF
+        pdf_path = os.path.join(BASE_DIR, 'static/pdfs', categorie, source, pdf_filename)
+
+        if not os.path.exists(pdf_path):
+            return jsonify({
+                'success': False,
+                'error': f'Fichier PDF non trouvé: {pdf_filename}'
+            }), 404
+
+        # Extraction du texte
+        texte = extraire_texte_pdf(pdf_path)
+        if not texte:
+            return jsonify({
+                'success': False,
+                'error': 'Impossible d\'extraire le texte du PDF'
+            }), 500
+
+        # Génération des flashcards
+        flashcards, error = generer_flashcards_via_api(texte, nb_flashcards, api_key)
+        if error:
+            return jsonify({
+                'success': False,
+                'error': error
+            }), 500
+
+        if not flashcards:
+            return jsonify({
+                'success': False,
+                'error': 'Aucune flashcard générée'
+            }), 500
+
+        # Sauvegarde dans un fichier CSV
+        nom_fichier_csv = nom_deck if nom_deck.endswith('.csv') else f"{nom_deck}.csv"
+        if sauvegarder_flashcards_csv(flashcards, nom_fichier_csv):
+            return jsonify({
+                'success': True,
+                'message': f'{len(flashcards)} flashcards générées avec succès',
+                'deck_name': nom_fichier_csv,
+                'nb_flashcards': len(flashcards)
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Erreur lors de la sauvegarde des flashcards'
+            }), 500
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Erreur serveur: {str(e)}'
+        }), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
