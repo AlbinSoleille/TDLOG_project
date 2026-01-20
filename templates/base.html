@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
@@ -12,7 +12,7 @@
     <script>
         window.MathJax = {
             tex: {
-                inlineMath: [['$', '$'], ['\\(', '\\)']] // Autorise les $ pour les maths
+                inlineMath: [['$', '$'], ['\\(', '\\)']]
             }
         };
     </script>
@@ -21,37 +21,243 @@
     <script>
         document.addEventListener('htmx:afterSwap', function(evt) {
             if (window.MathJax) {
-                window.MathJax.typeset(); // On demande à MathJax de relire la page
+                window.MathJax.typeset();
             }
         });
+
+        // Gestion des thèmes
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        }
+
+        function setTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('theme', theme);
+        }
+
+        // Initialiser le thème au chargement
+        initTheme();
     </script>
 
     <style>
+        /* Thème clair (par défaut) */
+        :root[data-theme="light"] {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --border-color: #dee2e6;
+            --nav-bg: #0d6efd;
+            --nav-text: #ffffff;
+            --card-bg: #ffffff;
+        }
+
+        /* Thème sombre */
+        :root[data-theme="dark"] {
+            --bg-primary: #1a1d24;
+            --bg-secondary: #0f1115;
+            --text-primary: #e9ecef;
+            --text-secondary: #adb5bd;
+            --border-color: #495057;
+            --nav-bg: #212529;
+            --nav-text: #ffffff;
+            --card-bg: #212529;
+        }
+
+        /* Thème gris */
+        :root[data-theme="gray"] {
+            --bg-primary: #e9ecef;
+            --bg-secondary: #dee2e6;
+            --text-primary: #212529;
+            --text-secondary: #495057;
+            --border-color: #adb5bd;
+            --nav-bg: #495057;
+            --nav-text: #ffffff;
+            --card-bg: #f8f9fa;
+        }
+
         body {
             padding-top: 70px;
             padding-bottom: 80px;
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            transition: background-color 0.3s, color 0.3s;
         }
+
+        .bg-light {
+            background-color: var(--bg-secondary) !important;
+        }
+
         .mobile-nav {
-            background: white;
-            border-top: 1px solid #dee2e6;
+            background: var(--card-bg);
+            border-top: 1px solid var(--border-color);
             box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
             z-index: 1030;
+            transition: background-color 0.3s;
         }
+
         .nav-link.active {
             color: #0d6efd !important;
             font-weight: bold;
         }
+
         .nav-link {
-            color: #6c757d;
+            color: var(--text-secondary);
         }
-        /* Petit ajustement pour que les maths ne cassent pas la mise en page */
+
         mjx-container {
             font-size: 110% !important;
+        }
+
+        /* Navbar principale */
+        .navbar-dark {
+            background: var(--nav-bg) !important;
+        }
+
+        /* Menu des paramètres */
+        .settings-dropdown {
+            position: relative;
+        }
+
+        .settings-btn {
+            background: none;
+            border: none;
+            color: var(--nav-text);
+            font-size: 1.25rem;
+            cursor: pointer;
+            padding: 6px 12px;
+            border-radius: 6px;
+            transition: background-color 0.2s;
+        }
+
+        .settings-btn:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .settings-menu {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: calc(100% + 10px);
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            min-width: 200px;
+            padding: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+        }
+
+        .settings-menu.show {
+            display: block;
+        }
+
+        .settings-menu-header {
+            padding: 8px 12px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 8px;
+        }
+
+        .theme-option {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            color: var(--text-primary);
+        }
+
+        .theme-option:hover {
+            background-color: var(--bg-secondary);
+        }
+
+        .theme-option.active {
+            background-color: rgba(13, 110, 253, 0.1);
+            font-weight: 500;
+        }
+
+        .theme-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+
+        .theme-icon-light {
+            background: linear-gradient(135deg, #ffffff 50%, #f8f9fa 50%);
+        }
+
+        .theme-icon-dark {
+            background: linear-gradient(135deg, #212529 50%, #0f1115 50%);
+        }
+
+        .theme-icon-gray {
+            background: linear-gradient(135deg, #dee2e6 50%, #adb5bd 50%);
+        }
+
+        /* Mobile settings button */
+        .mobile-settings {
+            position: fixed;
+            bottom: 70px;
+            right: 20px;
+            z-index: 1020;
+        }
+
+        .mobile-settings-btn {
+            background: var(--nav-bg);
+            color: var(--nav-text);
+            border: none;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            font-size: 1.25rem;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .mobile-settings-menu {
+            display: none;
+            position: fixed;
+            bottom: 130px;
+            right: 20px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            min-width: 200px;
+            padding: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1020;
+        }
+
+        .mobile-settings-menu.show {
+            display: block;
+        }
+
+        @media (max-width: 767px) {
+            .mobile-settings {
+                display: block;
+            }
+        }
+
+        @media (min-width: 768px) {
+            .mobile-settings {
+                display: none;
+            }
         }
     </style>
 </head>
 <body class="bg-light">
 
+    <!-- Navbar Desktop -->
     <nav class="navbar navbar-dark bg-primary fixed-top d-none d-md-block">
         <div class="container d-flex justify-content-between align-items-center">
             
@@ -67,6 +273,28 @@
                 <a class="btn {% if page == 'fiches' %}btn-light text-primary{% else %}btn-outline-light{% endif %}" 
                    href="{{ url_for('fiches') }}">Fiches</a>
                 
+                <!-- Menu Paramètres Desktop -->
+                <div class="settings-dropdown">
+                    <button class="settings-btn" onclick="toggleSettings(event)">
+                        ⋯
+                    </button>
+                    <div class="settings-menu" id="settingsMenu">
+                        <div class="settings-menu-header">Thème</div>
+                        <div class="theme-option" onclick="setTheme('light')">
+                            <div class="theme-icon theme-icon-light"></div>
+                            <span>Clair</span>
+                        </div>
+                        <div class="theme-option" onclick="setTheme('dark')">
+                            <div class="theme-icon theme-icon-dark"></div>
+                            <span>Sombre</span>
+                        </div>
+                        <div class="theme-option" onclick="setTheme('gray')">
+                            <div class="theme-icon theme-icon-gray"></div>
+                            <span>Gris</span>
+                        </div>
+                    </div>
+                </div>
+
                 {% if session.get('user') %}
                     <div class="border-start border-white ps-3 ms-2">
                         <a href="{{ url_for('logout') }}" class="btn btn-danger btn-sm">
@@ -82,6 +310,7 @@
         {% block content %}{% endblock %}
     </div>
 
+    <!-- Navbar Mobile -->
     <nav class="mobile-nav fixed-bottom d-md-none">
         <div class="d-flex justify-content-around py-2">
             
@@ -99,9 +328,66 @@
                 <div class="fs-4">📝</div>
                 <small style="font-size: 0.7rem;">Fiches</small>
             </a>
-
         </div>
     </nav>
+
+    <!-- Menu Paramètres Mobile -->
+    <div class="mobile-settings d-md-none">
+        <button class="mobile-settings-btn" onclick="toggleMobileSettings(event)">
+            ⋯
+        </button>
+        <div class="mobile-settings-menu" id="mobileSettingsMenu">
+            <div class="settings-menu-header">Thème</div>
+            <div class="theme-option" onclick="setTheme('light')">
+                <div class="theme-icon theme-icon-light"></div>
+                <span>Clair</span>
+            </div>
+            <div class="theme-option" onclick="setTheme('dark')">
+                <div class="theme-icon theme-icon-dark"></div>
+                <span>Sombre</span>
+            </div>
+            <div class="theme-option" onclick="setTheme('gray')">
+                <div class="theme-icon theme-icon-gray"></div>
+                <span>Gris</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleSettings(e) {
+            e.stopPropagation();
+            const menu = document.getElementById('settingsMenu');
+            menu.classList.toggle('show');
+        }
+
+        function toggleMobileSettings(e) {
+            e.stopPropagation();
+            const menu = document.getElementById('mobileSettingsMenu');
+            menu.classList.toggle('show');
+        }
+
+        // Fermer les menus en cliquant ailleurs
+        document.addEventListener('click', function() {
+            document.getElementById('settingsMenu').classList.remove('show');
+            document.getElementById('mobileSettingsMenu').classList.remove('show');
+        });
+
+        // Mettre à jour l'affichage du thème actif
+        function updateActiveTheme() {
+            const currentTheme = localStorage.getItem('theme') || 'light';
+            document.querySelectorAll('.theme-option').forEach(opt => {
+                opt.classList.remove('active');
+            });
+            document.querySelectorAll(`.theme-option`).forEach(opt => {
+                if (opt.onclick.toString().includes(`'${currentTheme}'`)) {
+                    opt.classList.add('active');
+                }
+            });
+        }
+
+        // Initialiser au chargement
+        document.addEventListener('DOMContentLoaded', updateActiveTheme);
+    </script>
 
 </body>
 </html>
