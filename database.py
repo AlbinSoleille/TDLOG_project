@@ -90,6 +90,17 @@ def init_database():
             )
         ''')
 
+        # Table des prompts personnalisés par utilisateur
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_prompts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL UNIQUE,
+                custom_prompt TEXT NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        ''')
+
         # Index pour améliorer les performances
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_flashcards_deck
@@ -293,6 +304,101 @@ def get_all_user_progress(user_id, deck_id):
                 up.due_date
         ''', (user_id, deck_id))
         return cursor.fetchall()
+
+
+# --- FONCTIONS POUR LES PROMPTS PERSONNALISÉS ---
+
+def get_user_prompt(user_id):
+    """Récupère le prompt personnalisé d'un utilisateur"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT custom_prompt FROM user_prompts WHERE user_id = ?', (user_id,))
+        result = cursor.fetchone()
+        return result['custom_prompt'] if result else None
+
+
+def save_user_prompt(user_id, custom_prompt):
+    """Sauvegarde ou met à jour le prompt personnalisé d'un utilisateur"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO user_prompts (user_id, custom_prompt, updated_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(user_id) DO UPDATE SET
+                custom_prompt = excluded.custom_prompt,
+                updated_at = datetime('now')
+        ''', (user_id, custom_prompt))
+
+
+# --- FONCTIONS POUR LES STATISTIQUES ---
+
+def get_user_statistics(user_id):
+    """Récupère les statistiques complètes d'un utilisateur (style Anki)"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Statistiques globales
+        cursor.execute('''
+            SELECT
+                COUNT(DISTINCT d.id) as total_decks,
+                COUNT(DISTINCT f.id) as total_cards,
+                COUNT(DISTINCT CASE WHEN up.id IS NOT NULL THEN f.id END) as cards_studied,
+                COUNT(DISTINCT CASE WHEN up.is_learning = 1 THEN f.id END) as cards_learning,
+                COUNT(DISTINCT CASE WHEN up.is_learning = 0 THEN f.id END) as cards_mature,
+                COUNT(DISTINCT CASE WHEN up.due_date <= datetime('now') THEN f.id END) as cards_due
+            FROM decks d
+            LEFT JOIN flashcards f ON d.id = f.deck_id
+            LEFT JOIN user_progress up ON f.id = up.flashcard_id AND up.user_id = ?
+            WHERE d.user_id = ?
+        ''', (user_id, user_id))
+        global_stats = cursor.fetchone()
+
+        # Cartes révisées aujourd'hui
+        cursor.execute('''
+            SELECT COUNT(DISTINCT flashcard_id) as cards_today
+            FROM user_progress
+            WHERE user_id = ?
+            AND date(last_reviewed) = date('now')
+        ''', (user_id,))
+        today_stats = cursor.fetchone()
+
+        # Statistiques par deck
+        cursor.execute('''
+            SELECT
+                d.name as deck_name,
+                COUNT(DISTINCT f.id) as total,
+                COUNT(DISTINCT CASE WHEN up.id IS NOT NULL THEN f.id END) as studied,
+                COUNT(DISTINCT CASE WHEN up.due_date <= datetime('now') THEN f.id END) as due,
+                COUNT(DISTINCT CASE WHEN up.is_learning = 1 THEN f.id END) as learning,
+                COUNT(DISTINCT CASE WHEN up.is_learning = 0 THEN f.id END) as mature
+            FROM decks d
+            LEFT JOIN flashcards f ON d.id = f.deck_id
+            LEFT JOIN user_progress up ON f.id = up.flashcard_id AND up.user_id = ?
+            WHERE d.user_id = ?
+            GROUP BY d.id, d.name
+            ORDER BY d.name
+        ''', (user_id, user_id))
+        deck_stats = cursor.fetchall()
+
+        # Activité des 30 derniers jours
+        cursor.execute('''
+            SELECT
+                date(last_reviewed) as date,
+                COUNT(DISTINCT flashcard_id) as cards_reviewed
+            FROM user_progress
+            WHERE user_id = ?
+            AND date(last_reviewed) >= date('now', '-30 days')
+            GROUP BY date(last_reviewed)
+            ORDER BY date(last_reviewed)
+        ''', (user_id,))
+        activity_stats = cursor.fetchall()
+
+        return {
+            'global': global_stats,
+            'today': today_stats,
+            'decks': deck_stats,
+            'activity': activity_stats
+        }
 
 
 if __name__ == '__main__':

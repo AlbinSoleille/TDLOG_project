@@ -109,8 +109,19 @@
                         <div class="mb-3">
                             <label for="nbFlashcards" class="form-label fw-bold">Nombre de flashcards</label>
                             <input type="number" class="form-control" id="nbFlashcards" name="nbFlashcards"
-                                   value="10" min="5" max="30" required>
-                            <small class="text-muted">Entre 5 et 30 flashcards</small>
+                                   value="10" min="5" max="500" required>
+                            <small class="text-muted">Entre 5 et 500 flashcards</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="ephemeralPrompt" class="form-label fw-bold">
+                                Prompt éphémère (optionnel)
+                                <span class="badge bg-info">Avancé</span>
+                            </label>
+                            <textarea class="form-control font-monospace" id="ephemeralPrompt" name="ephemeralPrompt" rows="4" placeholder="Laissez vide pour utiliser votre prompt personnel ou le prompt par défaut..."></textarea>
+                            <small class="text-muted">
+                                Ce prompt sera utilisé uniquement pour cette génération. Variables : <code>{nb_flashcards}</code>, <code>{texte}</code>
+                            </small>
                         </div>
 
                         <div class="alert alert-info mb-0">
@@ -180,6 +191,7 @@
             const source = document.getElementById('source').value;
             const nomDeck = document.getElementById('nomDeck').value.trim();
             const nbFlashcards = document.getElementById('nbFlashcards').value;
+            const ephemeralPrompt = document.getElementById('ephemeralPrompt').value.trim();
 
             if (!nomDeck) {
                 afficherMessage('Veuillez remplir le nom du deck', 'warning');
@@ -192,18 +204,25 @@
             btnSpinner.classList.remove('d-none');
 
             try {
+                const requestData = {
+                    pdf_filename: pdfFilename,
+                    categorie: categorie,
+                    source: source,
+                    nb_flashcards: parseInt(nbFlashcards),
+                    nom_deck: nomDeck
+                };
+
+                // Ajouter le prompt éphémère s'il est fourni
+                if (ephemeralPrompt) {
+                    requestData.ephemeral_prompt = ephemeralPrompt;
+                }
+
                 const response = await fetch('/api/generer-flashcards', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                        pdf_filename: pdfFilename,
-                        categorie: categorie,
-                        source: source,
-                        nb_flashcards: parseInt(nbFlashcards),
-                        nom_deck: nomDeck
-                    })
+                    body: JSON.stringify(requestData)
                 });
 
                 const data = await response.json();

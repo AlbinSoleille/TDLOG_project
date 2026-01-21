@@ -14,7 +14,8 @@ from database import (
     init_database, get_user_by_username, create_user,
     get_all_decks, get_user_decks, get_deck_by_name, create_deck,
     get_flashcards_by_deck, create_flashcard,
-    get_all_user_progress, update_progress, get_user_progress
+    get_all_user_progress, update_progress, get_user_progress,
+    get_user_prompt, save_user_prompt, get_user_statistics
 )
 
 # Importer l'algorithme Anki
@@ -31,6 +32,24 @@ os.makedirs(FLASHCARDS_DIR, exist_ok=True)
 
 # Initialiser la base de données au démarrage
 init_database()
+
+# --- PROMPT PAR DÉFAUT POUR LA GÉNÉRATION DE FLASHCARDS ---
+DEFAULT_PROMPT_TEMPLATE = """Tu es un assistant pédagogique. À partir du texte suivant, génère exactement {nb_flashcards} flashcards de qualité pour aider l'étudiant à mémoriser les concepts clés.
+
+Texte du cours:
+{texte}
+
+Règles:
+- Génère exactement {nb_flashcards} paires question/réponse
+- Les questions doivent être claires et précises
+- Les réponses doivent être concises mais complètes
+- Utilise la notation LaTeX entre $ pour les formules mathématiques (ex: $x^2$)
+- Format de réponse: une ligne par flashcard au format: QUESTION;;;REPONSE
+- Utilise EXACTEMENT trois points-virgules (;;;) comme séparateur
+
+Exemple de format attendu:
+Qu'est-ce qu'une variable aléatoire ?;;;Une fonction qui associe à chaque issue d'une expérience aléatoire un nombre réel
+Quelle est la formule de la variance ?;;;$Var(X) = E[(X - E[H])^2] = E[X^2] - (E[X])^2$"""
 
 # --- SECURITE ---
 def login_required(f):
@@ -55,27 +74,28 @@ def extraire_texte_pdf(pdf_path):
         print(f"Erreur lors de l'extraction du PDF: {e}")
         return None
 
-def generer_flashcards_via_api(texte, nb_flashcards=10):
-    """Génère des flashcards à partir du texte extrait en utilisant l'API configurée"""
+def generer_flashcards_via_api(texte, nb_flashcards=10, prompt_template=None):
+    """Génère des flashcards à partir du texte extrait en utilisant l'API configurée
+
+    Args:
+        texte: Le texte extrait du PDF
+        nb_flashcards: Nombre de flashcards à générer
+        prompt_template: Template de prompt personnalisé (optionnel)
+    """
 
     print(f"🔍 Début génération de {nb_flashcards} flashcards avec {API_PROVIDER}")
 
-    prompt = f"""Tu es un assistant pédagogique. À partir du texte suivant, génère exactement {nb_flashcards} flashcards de qualité pour aider l'étudiant à mémoriser les concepts clés.
+    # Utiliser le prompt template fourni ou le prompt par défaut
+    if not prompt_template:
+        prompt_template = DEFAULT_PROMPT_TEMPLATE
 
-Texte du cours:
-{texte[:8000]}
+    # Formatter le prompt avec les variables
+    prompt = prompt_template.format(
+        nb_flashcards=nb_flashcards,
+        texte=texte[:8000]  # Limiter à 8000 caractères pour ne pas dépasser les limites API
+    )
 
-Règles:
-- Génère exactement {nb_flashcards} paires question/réponse
-- Les questions doivent être claires et précises
-- Les réponses doivent être concises mais complètes
-- Utilise la notation LaTeX entre $ pour les formules mathématiques (ex: $x^2$)
-- Format de réponse: une ligne par flashcard au format: QUESTION;;;REPONSE
-- Utilise EXACTEMENT trois points-virgules (;;;) comme séparateur
-
-Exemple de format attendu:
-Qu'est-ce qu'une variable aléatoire ?;;;Une fonction qui associe à chaque issue d'une expérience aléatoire un nombre réel
-Quelle est la formule de la variance ?;;;$Var(X) = E[(X - E[X])^2] = E[X^2] - (E[X])^2$"""
+    print(f"📝 Utilisation du prompt {'personnalisé' if prompt_template != DEFAULT_PROMPT_TEMPLATE else 'par défaut'}")
 
     try:
         if API_PROVIDER == 'claude':
@@ -457,11 +477,14 @@ def generer_flashcards_from_pdf():
         source = data.get('source', 'uploads')  # 'uploads' ou 'originaux'
         nb_flashcards = int(data.get('nb_flashcards', 10))
         nom_deck = data.get('nom_deck')
+        ephemeral_prompt = data.get('ephemeral_prompt', '').strip()
 
         print(f"📄 PDF: {pdf_filename}")
         print(f"📁 Catégorie: {categorie}, Source: {source}")
         print(f"🎴 Nombre demandé: {nb_flashcards}")
         print(f"📦 Nom du deck: {nom_deck}")
+        if ephemeral_prompt:
+            print(f"✨ Prompt éphémère fourni ({len(ephemeral_prompt)} caractères)")
 
         if not pdf_filename or not nom_deck:
             print("❌ Paramètres manquants")
@@ -492,10 +515,24 @@ def generer_flashcards_from_pdf():
             }), 500
 
         print(f"✅ Texte extrait ({len(texte)} caractères)")
+
+        # Déterminer le prompt à utiliser (priorité: éphémère > personnalisé > défaut)
+        prompt_template = None
+        if ephemeral_prompt:
+            prompt_template = ephemeral_prompt
+            print("🎨 Utilisation du prompt éphémère")
+        else:
+            user_custom_prompt = get_user_prompt(user_id)
+            if user_custom_prompt:
+                prompt_template = user_custom_prompt
+                print("👤 Utilisation du prompt personnalisé de l'utilisateur")
+            else:
+                print("📋 Utilisation du prompt par défaut")
+
         print(f"🤖 Génération des flashcards avec {API_PROVIDER}...")
 
         # Génération des flashcards
-        flashcards, error = generer_flashcards_via_api(texte, nb_flashcards)
+        flashcards, error = generer_flashcards_via_api(texte, nb_flashcards, prompt_template)
         if error:
             print(f"❌ Erreur de génération: {error}")
             return jsonify({
@@ -546,6 +583,62 @@ def generer_flashcards_from_pdf():
             'success': False,
             'error': f'Erreur serveur: {str(e)}'
         }), 500
+
+# --- ROUTES PARAMÈTRES ---
+
+@app.route('/parametres')
+@login_required
+def parametres():
+    """Page de paramètres"""
+    return render_template('parametres.html', page='parametres')
+
+
+@app.route('/parametres/prompt', methods=['GET', 'POST'])
+@login_required
+def prompt_settings():
+    """Page de modification du prompt personnalisé"""
+    user_id = session.get('user_id')
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+
+        if action == 'save':
+            custom_prompt = request.form.get('custom_prompt', '').strip()
+            if custom_prompt:
+                save_user_prompt(user_id, custom_prompt)
+                flash('Prompt personnalisé sauvegardé avec succès !', 'success')
+            else:
+                flash('Le prompt ne peut pas être vide.', 'warning')
+
+        elif action == 'reset':
+            # Réinitialiser au prompt par défaut
+            save_user_prompt(user_id, DEFAULT_PROMPT_TEMPLATE)
+            flash('Prompt réinitialisé au prompt par défaut.', 'info')
+
+        return redirect(url_for('prompt_settings'))
+
+    # Récupérer le prompt personnalisé de l'utilisateur ou utiliser le défaut
+    custom_prompt = get_user_prompt(user_id)
+    if not custom_prompt:
+        custom_prompt = DEFAULT_PROMPT_TEMPLATE
+
+    return render_template('prompt.html',
+                          custom_prompt=custom_prompt,
+                          default_prompt=DEFAULT_PROMPT_TEMPLATE,
+                          page='parametres')
+
+
+@app.route('/parametres/statistiques')
+@login_required
+def statistics():
+    """Page des statistiques de l'utilisateur"""
+    user_id = session.get('user_id')
+    stats = get_user_statistics(user_id)
+
+    return render_template('statistiques.html',
+                          stats=stats,
+                          page='parametres')
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
