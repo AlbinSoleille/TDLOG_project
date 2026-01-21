@@ -159,8 +159,42 @@
             font-size: 0.875rem;
             font-weight: 600;
             color: var(--text-secondary);
+        }
+
+        .theme-submenu {
+            display: none;
+            padding-left: 12px;
+            margin-top: 4px;
+        }
+
+        .theme-submenu.show {
+            display: block;
+        }
+
+        .theme-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            color: var(--text-primary);
             border-bottom: 1px solid var(--border-color);
-            margin-bottom: 8px;
+            margin-bottom: 4px;
+        }
+
+        .theme-header:hover {
+            background-color: rgba(13, 110, 253, 0.05);
+        }
+
+        .theme-arrow {
+            transition: transform 0.3s;
+            font-size: 0.8rem;
+        }
+
+        .theme-arrow.rotated {
+            transform: rotate(90deg);
         }
 
         .theme-option {
@@ -280,19 +314,24 @@
                         ⋯
                     </button>
                     <div class="settings-menu" id="settingsMenu">
-                        <!-- Thème -->
-                        <div class="settings-menu-header">🎨 Thème</div>
-                        <div class="theme-option" onclick="setTheme('light')">
-                            <div class="theme-icon theme-icon-light"></div>
-                            <span>Clair</span>
+                        <!-- Thème (cliquable pour dévoiler les options) -->
+                        <div class="theme-header" onclick="toggleThemeSubmenu(event)">
+                            <span>🎨 Thème</span>
+                            <span class="theme-arrow" id="themeArrow">▶</span>
                         </div>
-                        <div class="theme-option" onclick="setTheme('dark')">
-                            <div class="theme-icon theme-icon-dark"></div>
-                            <span>Sombre</span>
-                        </div>
-                        <div class="theme-option" onclick="setTheme('gray')">
-                            <div class="theme-icon theme-icon-gray"></div>
-                            <span>Gris</span>
+                        <div class="theme-submenu" id="themeSubmenu">
+                            <div class="theme-option" onclick="setTheme('light')">
+                                <div class="theme-icon theme-icon-light"></div>
+                                <span>Clair</span>
+                            </div>
+                            <div class="theme-option" onclick="setTheme('dark')">
+                                <div class="theme-icon theme-icon-dark"></div>
+                                <span>Sombre</span>
+                            </div>
+                            <div class="theme-option" onclick="setTheme('gray')">
+                                <div class="theme-icon theme-icon-gray"></div>
+                                <span>Gris</span>
+                            </div>
                         </div>
 
                         <!-- Séparateur -->
@@ -358,19 +397,24 @@
             ⋯
         </button>
         <div class="mobile-settings-menu" id="mobileSettingsMenu">
-            <!-- Thème -->
-            <div class="settings-menu-header">🎨 Thème</div>
-            <div class="theme-option" onclick="setTheme('light')">
-                <div class="theme-icon theme-icon-light"></div>
-                <span>Clair</span>
+            <!-- Thème (cliquable pour dévoiler les options) -->
+            <div class="theme-header" onclick="toggleMobileThemeSubmenu(event)">
+                <span>🎨 Thème</span>
+                <span class="theme-arrow" id="mobileThemeArrow">▶</span>
             </div>
-            <div class="theme-option" onclick="setTheme('dark')">
-                <div class="theme-icon theme-icon-dark"></div>
-                <span>Sombre</span>
-            </div>
-            <div class="theme-option" onclick="setTheme('gray')">
-                <div class="theme-icon theme-icon-gray"></div>
-                <span>Gris</span>
+            <div class="theme-submenu" id="mobileThemeSubmenu">
+                <div class="theme-option" onclick="setTheme('light')">
+                    <div class="theme-icon theme-icon-light"></div>
+                    <span>Clair</span>
+                </div>
+                <div class="theme-option" onclick="setTheme('dark')">
+                    <div class="theme-icon theme-icon-dark"></div>
+                    <span>Sombre</span>
+                </div>
+                <div class="theme-option" onclick="setTheme('gray')">
+                    <div class="theme-icon theme-icon-gray"></div>
+                    <span>Gris</span>
+                </div>
             </div>
 
             <!-- Séparateur -->
@@ -407,10 +451,31 @@
             menu.classList.toggle('show');
         }
 
+        function toggleThemeSubmenu(e) {
+            e.stopPropagation();
+            const submenu = document.getElementById('themeSubmenu');
+            const arrow = document.getElementById('themeArrow');
+            submenu.classList.toggle('show');
+            arrow.classList.toggle('rotated');
+        }
+
+        function toggleMobileThemeSubmenu(e) {
+            e.stopPropagation();
+            const submenu = document.getElementById('mobileThemeSubmenu');
+            const arrow = document.getElementById('mobileThemeArrow');
+            submenu.classList.toggle('show');
+            arrow.classList.toggle('rotated');
+        }
+
         // Fermer les menus en cliquant ailleurs
         document.addEventListener('click', function() {
             document.getElementById('settingsMenu').classList.remove('show');
             document.getElementById('mobileSettingsMenu').classList.remove('show');
+            // Fermer aussi les sous-menus de thème
+            document.getElementById('themeSubmenu').classList.remove('show');
+            document.getElementById('mobileThemeSubmenu').classList.remove('show');
+            document.getElementById('themeArrow').classList.remove('rotated');
+            document.getElementById('mobileThemeArrow').classList.remove('rotated');
         });
 
         // Mettre à jour l'affichage du thème actif
