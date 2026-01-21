@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container" style="max-width: 1000px;">
+    <h1 class="mb-4 mt-2">📊 Statistiques de Révision</h1>
+
+    <!-- Statistiques globales -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card text-center border-primary">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Total Decks</h6>
+                    <h2 class="card-title text-primary mb-0">{{ stats.global.total_decks }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-center border-info">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Total Cartes</h6>
+                    <h2 class="card-title text-info mb-0">{{ stats.global.total_cards }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-center border-success">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Cartes Étudiées</h6>
+                    <h2 class="card-title text-success mb-0">{{ stats.global.cards_studied }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-center border-warning">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">À Réviser</h6>
+                    <h2 class="card-title text-warning mb-0">{{ stats.global.cards_due }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Activité du jour -->
+    <div class="card mb-4 border-success">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0">📅 Aujourd'hui</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h3 class="text-success">{{ stats.today.cards_today }}</h3>
+                    <p class="text-muted mb-0">cartes révisées aujourd'hui</p>
+                </div>
+                <div class="col-md-6 text-end">
+                    {% if stats.global.cards_due > 0 %}
+                        <a href="{{ url_for('flashcards_menu') }}" class="btn btn-success">
+                            🎴 Continuer à réviser
+                        </a>
+                    {% else %}
+                        <span class="text-muted">✅ Aucune carte à réviser !</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Répartition des cartes -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">🎯 Répartition des Cartes</h5>
+        </div>
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col-md-4 mb-3">
+                    <div class="p-3 border rounded">
+                        <h4 class="text-warning mb-1">{{ stats.global.cards_learning }}</h4>
+                        <small class="text-muted">En apprentissage</small>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="p-3 border rounded">
+                        <h4 class="text-success mb-1">{{ stats.global.cards_mature }}</h4>
+                        <small class="text-muted">Cartes matures</small>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="p-3 border rounded">
+                        <h4 class="text-secondary mb-1">{{ stats.global.total_cards - stats.global.cards_studied }}</h4>
+                        <small class="text-muted">Jamais vues</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistiques par deck -->
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">📚 Statistiques par Deck</h5>
+        </div>
+        <div class="card-body">
+            {% if stats.decks|length == 0 %}
+                <p class="text-muted text-center my-4">Aucun deck trouvé. Générez des flashcards depuis vos cours !</p>
+            {% else %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Deck</th>
+                                <th class="text-center">Total</th>
+                                <th class="text-center">Étudiées</th>
+                                <th class="text-center">À réviser</th>
+                                <th class="text-center">Apprentissage</th>
+                                <th class="text-center">Matures</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for deck in stats.decks %}
+                            <tr>
+                                <td><strong>{{ deck.deck_name }}</strong></td>
+                                <td class="text-center">{{ deck.total }}</td>
+                                <td class="text-center">{{ deck.studied }}</td>
+                                <td class="text-center">
+                                    <span class="badge bg-warning">{{ deck.due }}</span>
+                                </td>
+                                <td class="text-center">{{ deck.learning }}</td>
+                                <td class="text-center">{{ deck.mature }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Activité des 30 derniers jours -->
+    <div class="card mb-4">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0">📈 Activité des 30 derniers jours</h5>
+        </div>
+        <div class="card-body">
+            {% if stats.activity|length == 0 %}
+                <p class="text-muted text-center my-4">Aucune activité récente. Commencez à réviser pour voir vos statistiques !</p>
+            {% else %}
+                <div class="row">
+                    {% for day in stats.activity %}
+                    <div class="col-md-3 mb-2">
+                        <div class="d-flex justify-content-between align-items-center p-2 border rounded">
+                            <small class="text-muted">{{ day.date }}</small>
+                            <span class="badge bg-primary">{{ day.cards_reviewed }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Retour -->
+    <div class="text-center mt-4 mb-4">
+        <a href="{{ url_for('parametres') }}" class="btn btn-secondary">
+            ← Retour aux paramètres
+        </a>
+    </div>
+</div>
+{% endblock %}

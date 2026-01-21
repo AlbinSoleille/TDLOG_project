@@ -14,7 +14,8 @@ from database import (
     init_database, get_user_by_username, create_user,
     get_all_decks, get_user_decks, get_deck_by_name, create_deck,
     get_flashcards_by_deck, create_flashcard,
-    get_all_user_progress, update_progress, get_user_progress
+    get_all_user_progress, update_progress, get_user_progress,
+    get_user_prompt, save_user_prompt, get_user_statistics
 )
 
 # Importer l'algorithme Anki
@@ -31,6 +32,24 @@ os.makedirs(FLASHCARDS_DIR, exist_ok=True)
 
 # Initialiser la base de données au démarrage
 init_database()
+
+# --- PROMPT PAR DÉFAUT POUR LA GÉNÉRATION DE FLASHCARDS ---
+DEFAULT_PROMPT_TEMPLATE = """Tu es un assistant pédagogique. À partir du texte suivant, génère exactement {nb_flashcards} flashcards de qualité pour aider l'étudiant à mémoriser les concepts clés.
+
+Texte du cours:
+{texte}
+
+Règles:
+- Génère exactement {nb_flashcards} paires question/réponse
+- Les questions doivent être claires et précises
+- Les réponses doivent être concises mais complètes
+- Utilise la notation LaTeX entre $ pour les formules mathématiques (ex: $x^2$)
+- Format de réponse: une ligne par flashcard au format: QUESTION;;;REPONSE
+- Utilise EXACTEMENT trois points-virgules (;;;) comme séparateur
+
+Exemple de format attendu:
+Qu'est-ce qu'une variable aléatoire ?;;;Une fonction qui associe à chaque issue d'une expérience aléatoire un nombre réel
+Quelle est la formule de la variance ?;;;$Var(X) = E[(X - E[H])^2] = E[X^2] - (E[X])^2$"""
 
 # --- SECURITE ---
 def login_required(f):
@@ -55,25 +74,28 @@ def extraire_texte_pdf(pdf_path):
         print(f"Erreur lors de l'extraction du PDF: {e}")
         return None
 
-def generer_flashcards_via_api(texte, nb_flashcards=10):
-    """Génère des flashcards à partir du texte extrait en utilisant l'API configurée"""
+def generer_flashcards_via_api(texte, nb_flashcards=10, prompt_template=None):
+    """Génère des flashcards à partir du texte extrait en utilisant l'API configurée
 
-    prompt = f"""Tu es un assistant pédagogique. À partir du texte suivant, génère exactement {nb_flashcards} flashcards de qualité pour aider l'étudiant à mémoriser les concepts clés.
+    Args:
+        texte: Le texte extrait du PDF
+        nb_flashcards: Nombre de flashcards à générer
+        prompt_template: Template de prompt personnalisé (optionnel)
+    """
 
-Texte du cours:
-{texte[:8000]}
+    print(f"🔍 Début génération de {nb_flashcards} flashcards avec {API_PROVIDER}")
 
-Règles:
-- Génère exactement {nb_flashcards} paires question/réponse
-- Les questions doivent être claires et précises
-- Les réponses doivent être concises mais complètes
-- Utilise la notation LaTeX entre $ pour les formules mathématiques (ex: $x^2$)
-- Format de réponse: une ligne par flashcard au format: QUESTION;;;REPONSE
-- Utilise EXACTEMENT trois points-virgules (;;;) comme séparateur
+    # Utiliser le prompt template fourni ou le prompt par défaut
+    if not prompt_template:
+        prompt_template = DEFAULT_PROMPT_TEMPLATE
 
-Exemple de format attendu:
-Qu'est-ce qu'une variable aléatoire ?;;;Une fonction qui associe à chaque issue d'une expérience aléatoire un nombre réel
-Quelle est la formule de la variance ?;;;$Var(X) = E[(X - E[X])^2] = E[X^2] - (E[X])^2$"""
+    # Formatter le prompt avec les variables
+    prompt = prompt_template.format(
+        nb_flashcards=nb_flashcards,
+        texte=texte[:8000]  # Limiter à 8000 caractères pour ne pas dépasser les limites API
+    )
+
+    print(f"📝 Utilisation du prompt {'personnalisé' if prompt_template != DEFAULT_PROMPT_TEMPLATE else 'par défaut'}")
 
     try:
         if API_PROVIDER == 'claude':
@@ -81,8 +103,10 @@ Quelle est la formule de la variance ?;;;$Var(X) = E[(X - E[X])^2] = E[X^2] - (E
             from anthropic import Anthropic
 
             if ANTHROPIC_API_KEY == 'votre-cle-api-claude-ici':
-                return None, "⚠️ Veuillez configurer votre clé API Claude dans config.py"
+                print("⚠️  Clé API Claude non configurée - Génération de flashcards d'exemple")
+                return generer_flashcards_exemple(nb_flashcards), None
 
+            print(f"📡 Appel API Claude ({MODELS['claude']})")
             client = Anthropic(api_key=ANTHROPIC_API_KEY)
             response = client.messages.create(
                 model=MODELS['claude'],
@@ -99,8 +123,10 @@ Quelle est la formule de la variance ?;;;$Var(X) = E[(X - E[X])^2] = E[X^2] - (E
             import google.generativeai as genai
 
             if GOOGLE_API_KEY == 'votre-cle-api-gemini-ici':
-                return None, "⚠️ Veuillez configurer votre clé API Gemini dans config.py"
+                print("⚠️  Clé API Gemini non configurée - Génération de flashcards d'exemple")
+                return generer_flashcards_exemple(nb_flashcards), None
 
+            print(f"📡 Appel API Gemini ({MODELS['gemini']})")
             genai.configure(api_key=GOOGLE_API_KEY)
             model = genai.GenerativeModel(MODELS['gemini'])
             response = model.generate_content(prompt)
@@ -111,8 +137,10 @@ Quelle est la formule de la variance ?;;;$Var(X) = E[(X - E[X])^2] = E[X^2] - (E
             from openai import OpenAI
 
             if OPENAI_API_KEY == 'votre-cle-api-openai-ici':
-                return None, "⚠️ Veuillez configurer votre clé API OpenAI dans config.py"
+                print("⚠️  Clé API OpenAI non configurée - Génération de flashcards d'exemple")
+                return generer_flashcards_exemple(nb_flashcards), None
 
+            print(f"📡 Appel API OpenAI ({MODELS['openai']})")
             client = OpenAI(api_key=OPENAI_API_KEY)
             response = client.chat.completions.create(
                 model=MODELS['openai'],
@@ -127,6 +155,8 @@ Quelle est la formule de la variance ?;;;$Var(X) = E[(X - E[X])^2] = E[X^2] - (E
         else:
             return None, f"Provider API non reconnu: {API_PROVIDER}"
 
+        print(f"✅ Réponse reçue de l'API, parsing des flashcards...")
+
         # Parser les flashcards
         flashcards = []
         lignes = contenu.strip().split('\n')
@@ -140,12 +170,46 @@ Quelle est la formule de la variance ?;;;$Var(X) = E[(X - E[X])^2] = E[X^2] - (E
                         flashcards.append({'question': question, 'reponse': reponse})
 
         if not flashcards:
+            print(f"❌ Aucune flashcard extraite. Contenu reçu:\n{contenu[:500]}")
             return None, "Aucune flashcard n'a pu être extraite. Format de réponse incorrect."
 
+        print(f"✅ {len(flashcards)} flashcards générées avec succès")
         return flashcards, None
 
     except Exception as e:
+        print(f"❌ Erreur lors de la génération: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None, f"Erreur lors de la génération ({API_PROVIDER}): {str(e)}"
+
+
+def generer_flashcards_exemple(nb_flashcards=10):
+    """Génère des flashcards d'exemple pour tester le système (sans API)"""
+    exemples = [
+        {'question': "Qu'est-ce qu'une variable aléatoire ?",
+         'reponse': "Une fonction qui associe à chaque issue d'une expérience aléatoire un nombre réel"},
+        {'question': "Quelle est la formule de la variance ?",
+         'reponse': "$Var(X) = E[(X - E[X])^2] = E[X^2] - (E[X])^2$"},
+        {'question': "Qu'est-ce qu'une loi normale ?",
+         'reponse': "Une loi de probabilité continue caractérisée par sa moyenne $\\mu$ et son écart-type $\\sigma$"},
+        {'question': "Qu'est-ce que l'espérance mathématique ?",
+         'reponse': "La moyenne pondérée des valeurs que peut prendre une variable aléatoire"},
+        {'question': "Qu'est-ce qu'un événement ?",
+         'reponse': "Un sous-ensemble de l'ensemble des issues possibles d'une expérience aléatoire"},
+        {'question': "Qu'est-ce que la probabilité conditionnelle ?",
+         'reponse': "La probabilité qu'un événement se produise sachant qu'un autre événement s'est produit"},
+        {'question': "Qu'est-ce qu'un échantillon ?",
+         'reponse': "Un sous-ensemble d'une population sélectionné pour être étudié"},
+        {'question': "Qu'est-ce que l'écart-type ?",
+         'reponse': "La racine carrée de la variance, mesure de la dispersion des données"},
+        {'question': "Qu'est-ce qu'une loi binomiale ?",
+         'reponse': "Loi de probabilité du nombre de succès dans une série d'épreuves indépendantes"},
+        {'question': "Qu'est-ce que la médiane ?",
+         'reponse': "La valeur qui partage une distribution en deux parties égales"},
+    ]
+
+    # Retourner le nombre demandé de flashcards
+    return exemples[:min(nb_flashcards, len(exemples))]
 
 def sauvegarder_flashcards_db(flashcards, nom_deck, user_id):
     """Sauvegarde les flashcards générées dans la base de données pour un utilisateur"""
@@ -399,9 +463,13 @@ def generer_flashcards_from_pdf():
     """Endpoint API pour générer des flashcards à partir d'un PDF"""
     try:
         data = request.get_json()
+        print(f"\n{'='*60}")
+        print(f"🚀 GÉNÉRATION DE FLASHCARDS - Nouvelle requête")
+        print(f"{'='*60}")
 
         # Récupération de l'utilisateur courant
         user_id = session.get('user_id')
+        print(f"👤 User ID: {user_id}")
 
         # Récupération des paramètres
         pdf_filename = data.get('pdf_filename')
@@ -409,8 +477,17 @@ def generer_flashcards_from_pdf():
         source = data.get('source', 'uploads')  # 'uploads' ou 'originaux'
         nb_flashcards = int(data.get('nb_flashcards', 10))
         nom_deck = data.get('nom_deck')
+        ephemeral_prompt = data.get('ephemeral_prompt', '').strip()
+
+        print(f"📄 PDF: {pdf_filename}")
+        print(f"📁 Catégorie: {categorie}, Source: {source}")
+        print(f"🎴 Nombre demandé: {nb_flashcards}")
+        print(f"📦 Nom du deck: {nom_deck}")
+        if ephemeral_prompt:
+            print(f"✨ Prompt éphémère fourni ({len(ephemeral_prompt)} caractères)")
 
         if not pdf_filename or not nom_deck:
+            print("❌ Paramètres manquants")
             return jsonify({
                 'success': False,
                 'error': 'Paramètres manquants (pdf_filename, nom_deck requis)'
@@ -418,54 +495,150 @@ def generer_flashcards_from_pdf():
 
         # Construction du chemin du PDF
         pdf_path = os.path.join(BASE_DIR, 'static/pdfs', categorie, source, pdf_filename)
+        print(f"🔍 Chemin PDF: {pdf_path}")
 
         if not os.path.exists(pdf_path):
+            print(f"❌ Fichier PDF non trouvé: {pdf_path}")
             return jsonify({
                 'success': False,
                 'error': f'Fichier PDF non trouvé: {pdf_filename}'
             }), 404
 
+        print("✅ PDF trouvé, extraction du texte...")
         # Extraction du texte
         texte = extraire_texte_pdf(pdf_path)
         if not texte:
+            print("❌ Impossible d'extraire le texte")
             return jsonify({
                 'success': False,
                 'error': 'Impossible d\'extraire le texte du PDF'
             }), 500
 
+        print(f"✅ Texte extrait ({len(texte)} caractères)")
+
+        # Déterminer le prompt à utiliser (priorité: éphémère > personnalisé > défaut)
+        prompt_template = None
+        if ephemeral_prompt:
+            prompt_template = ephemeral_prompt
+            print("🎨 Utilisation du prompt éphémère")
+        else:
+            user_custom_prompt = get_user_prompt(user_id)
+            if user_custom_prompt:
+                prompt_template = user_custom_prompt
+                print("👤 Utilisation du prompt personnalisé de l'utilisateur")
+            else:
+                print("📋 Utilisation du prompt par défaut")
+
+        print(f"🤖 Génération des flashcards avec {API_PROVIDER}...")
+
         # Génération des flashcards
-        flashcards, error = generer_flashcards_via_api(texte, nb_flashcards)
+        flashcards, error = generer_flashcards_via_api(texte, nb_flashcards, prompt_template)
         if error:
+            print(f"❌ Erreur de génération: {error}")
             return jsonify({
                 'success': False,
                 'error': error
             }), 500
 
         if not flashcards:
+            print("❌ Aucune flashcard générée")
             return jsonify({
                 'success': False,
                 'error': 'Aucune flashcard générée'
             }), 500
 
+        print(f"✅ {len(flashcards)} flashcards générées")
+        print(f"💾 Sauvegarde dans la base de données...")
+
         # Sauvegarde dans la base de données SQLite
         if sauvegarder_flashcards_db(flashcards, nom_deck, user_id):
+            print(f"✅ Sauvegarde réussie! Deck: {nom_deck}")
+            print(f"{'='*60}\n")
+
+            # Message selon si c'est avec API ou exemples
+            if GOOGLE_API_KEY == 'votre-cle-api-gemini-ici' and API_PROVIDER == 'gemini':
+                message_prefix = "⚠️ MODE TEST: "
+            else:
+                message_prefix = ""
+
             return jsonify({
                 'success': True,
-                'message': f'{len(flashcards)} flashcards générées avec succès',
+                'message': f'{message_prefix}{len(flashcards)} flashcards générées avec succès',
                 'deck_name': nom_deck,
-                'nb_flashcards': len(flashcards)
+                'nb_flashcards': len(flashcards),
+                'api_provider': API_PROVIDER
             })
         else:
+            print("❌ Erreur lors de la sauvegarde")
             return jsonify({
                 'success': False,
                 'error': 'Erreur lors de la sauvegarde des flashcards'
             }), 500
 
     except Exception as e:
+        print(f"❌ ERREUR SERVEUR: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': f'Erreur serveur: {str(e)}'
         }), 500
+
+# --- ROUTES PARAMÈTRES ---
+
+@app.route('/parametres')
+@login_required
+def parametres():
+    """Page de paramètres"""
+    return render_template('parametres.html', page='parametres')
+
+
+@app.route('/parametres/prompt', methods=['GET', 'POST'])
+@login_required
+def prompt_settings():
+    """Page de modification du prompt personnalisé"""
+    user_id = session.get('user_id')
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+
+        if action == 'save':
+            custom_prompt = request.form.get('custom_prompt', '').strip()
+            if custom_prompt:
+                save_user_prompt(user_id, custom_prompt)
+                flash('Prompt personnalisé sauvegardé avec succès !', 'success')
+            else:
+                flash('Le prompt ne peut pas être vide.', 'warning')
+
+        elif action == 'reset':
+            # Réinitialiser au prompt par défaut
+            save_user_prompt(user_id, DEFAULT_PROMPT_TEMPLATE)
+            flash('Prompt réinitialisé au prompt par défaut.', 'info')
+
+        return redirect(url_for('prompt_settings'))
+
+    # Récupérer le prompt personnalisé de l'utilisateur ou utiliser le défaut
+    custom_prompt = get_user_prompt(user_id)
+    if not custom_prompt:
+        custom_prompt = DEFAULT_PROMPT_TEMPLATE
+
+    return render_template('prompt.html',
+                          custom_prompt=custom_prompt,
+                          default_prompt=DEFAULT_PROMPT_TEMPLATE,
+                          page='parametres')
+
+
+@app.route('/parametres/statistiques')
+@login_required
+def statistics():
+    """Page des statistiques de l'utilisateur"""
+    user_id = session.get('user_id')
+    stats = get_user_statistics(user_id)
+
+    return render_template('statistiques.html',
+                          stats=stats,
+                          page='parametres')
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -280,7 +280,8 @@
                         ⋯
                     </button>
                     <div class="settings-menu" id="settingsMenu">
-                        <div class="settings-menu-header">Thème</div>
+                        <!-- Thème -->
+                        <div class="settings-menu-header">🎨 Thème</div>
                         <div class="theme-option" onclick="setTheme('light')">
                             <div class="theme-icon theme-icon-light"></div>
                             <span>Clair</span>
@@ -293,6 +294,25 @@
                             <div class="theme-icon theme-icon-gray"></div>
                             <span>Gris</span>
                         </div>
+
+                        <!-- Séparateur -->
+                        <hr class="my-2">
+
+                        <!-- Prompt -->
+                        <a href="{{ url_for('prompt_settings') }}" class="theme-option" style="color: inherit; text-decoration: none;">
+                            <span>🤖 Prompt IA</span>
+                        </a>
+
+                        <!-- Statistiques -->
+                        <a href="{{ url_for('statistics') }}" class="theme-option" style="color: inherit; text-decoration: none;">
+                            <span>📊 Statistiques</span>
+                        </a>
+
+                        <!-- Tous les paramètres -->
+                        <hr class="my-2">
+                        <a href="{{ url_for('parametres') }}" class="theme-option" style="color: inherit; text-decoration: none;">
+                            <span>⚙️ Tous les paramètres</span>
+                        </a>
                     </div>
                 </div>
 
@@ -338,7 +358,8 @@
             ⋯
         </button>
         <div class="mobile-settings-menu" id="mobileSettingsMenu">
-            <div class="settings-menu-header">Thème</div>
+            <!-- Thème -->
+            <div class="settings-menu-header">🎨 Thème</div>
             <div class="theme-option" onclick="setTheme('light')">
                 <div class="theme-icon theme-icon-light"></div>
                 <span>Clair</span>
@@ -351,6 +372,25 @@
                 <div class="theme-icon theme-icon-gray"></div>
                 <span>Gris</span>
             </div>
+
+            <!-- Séparateur -->
+            <hr class="my-2">
+
+            <!-- Prompt -->
+            <a href="{{ url_for('prompt_settings') }}" class="theme-option" style="color: inherit; text-decoration: none;">
+                <span>🤖 Prompt IA</span>
+            </a>
+
+            <!-- Statistiques -->
+            <a href="{{ url_for('statistics') }}" class="theme-option" style="color: inherit; text-decoration: none;">
+                <span>📊 Statistiques</span>
+            </a>
+
+            <!-- Tous les paramètres -->
+            <hr class="my-2">
+            <a href="{{ url_for('parametres') }}" class="theme-option" style="color: inherit; text-decoration: none;">
+                <span>⚙️ Tous les paramètres</span>
+            </a>
         </div>
     </div>
 
