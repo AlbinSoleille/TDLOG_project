@@ -56,8 +56,10 @@ def init_database():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS decks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                name TEXT NOT NULL,
+                user_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         ''')
 
@@ -138,17 +140,26 @@ def get_all_users():
 
 # --- FONCTIONS POUR LES DECKS ---
 
-def create_deck(name):
-    """Crée un nouveau deck"""
+def create_deck(name, user_id=None):
+    """Crée un nouveau deck pour un utilisateur"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         try:
-            cursor.execute('INSERT INTO decks (name) VALUES (?)', (name,))
+            cursor.execute('INSERT INTO decks (name, user_id) VALUES (?, ?)', (name, user_id))
             return cursor.lastrowid
         except sqlite3.IntegrityError:
-            # Le deck existe déjà
-            cursor.execute('SELECT id FROM decks WHERE name = ?', (name,))
-            return cursor.fetchone()[0]
+            # Le deck existe déjà, vérifier s'il appartient à cet utilisateur
+            if user_id:
+                cursor.execute('SELECT id FROM decks WHERE name = ? AND user_id = ?', (name, user_id))
+            else:
+                cursor.execute('SELECT id FROM decks WHERE name = ?', (name,))
+            result = cursor.fetchone()
+            if result:
+                return result[0]
+            # Si le deck existe mais appartient à un autre utilisateur, créer un nom unique
+            cursor.execute('INSERT INTO decks (name, user_id) VALUES (?, ?)',
+                         (f"{name}_{user_id}", user_id))
+            return cursor.lastrowid
 
 
 def get_deck_by_name(name):
@@ -164,6 +175,14 @@ def get_all_decks():
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM decks ORDER BY name')
+        return cursor.fetchall()
+
+
+def get_user_decks(user_id):
+    """Récupère tous les decks d'un utilisateur"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM decks WHERE user_id = ? ORDER BY created_at DESC', (user_id,))
         return cursor.fetchall()
 
 
