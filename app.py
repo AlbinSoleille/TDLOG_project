@@ -58,6 +58,8 @@ def extraire_texte_pdf(pdf_path):
 def generer_flashcards_via_api(texte, nb_flashcards=10):
     """Génère des flashcards à partir du texte extrait en utilisant l'API configurée"""
 
+    print(f"🔍 Début génération de {nb_flashcards} flashcards avec {API_PROVIDER}")
+
     prompt = f"""Tu es un assistant pédagogique. À partir du texte suivant, génère exactement {nb_flashcards} flashcards de qualité pour aider l'étudiant à mémoriser les concepts clés.
 
 Texte du cours:
@@ -81,8 +83,10 @@ Quelle est la formule de la variance ?;;;$Var(X) = E[(X - E[X])^2] = E[X^2] - (E
             from anthropic import Anthropic
 
             if ANTHROPIC_API_KEY == 'votre-cle-api-claude-ici':
-                return None, "⚠️ Veuillez configurer votre clé API Claude dans config.py"
+                print("⚠️  Clé API Claude non configurée - Génération de flashcards d'exemple")
+                return generer_flashcards_exemple(nb_flashcards), None
 
+            print(f"📡 Appel API Claude ({MODELS['claude']})")
             client = Anthropic(api_key=ANTHROPIC_API_KEY)
             response = client.messages.create(
                 model=MODELS['claude'],
@@ -99,8 +103,10 @@ Quelle est la formule de la variance ?;;;$Var(X) = E[(X - E[X])^2] = E[X^2] - (E
             import google.generativeai as genai
 
             if GOOGLE_API_KEY == 'votre-cle-api-gemini-ici':
-                return None, "⚠️ Veuillez configurer votre clé API Gemini dans config.py"
+                print("⚠️  Clé API Gemini non configurée - Génération de flashcards d'exemple")
+                return generer_flashcards_exemple(nb_flashcards), None
 
+            print(f"📡 Appel API Gemini ({MODELS['gemini']})")
             genai.configure(api_key=GOOGLE_API_KEY)
             model = genai.GenerativeModel(MODELS['gemini'])
             response = model.generate_content(prompt)
@@ -111,8 +117,10 @@ Quelle est la formule de la variance ?;;;$Var(X) = E[(X - E[X])^2] = E[X^2] - (E
             from openai import OpenAI
 
             if OPENAI_API_KEY == 'votre-cle-api-openai-ici':
-                return None, "⚠️ Veuillez configurer votre clé API OpenAI dans config.py"
+                print("⚠️  Clé API OpenAI non configurée - Génération de flashcards d'exemple")
+                return generer_flashcards_exemple(nb_flashcards), None
 
+            print(f"📡 Appel API OpenAI ({MODELS['openai']})")
             client = OpenAI(api_key=OPENAI_API_KEY)
             response = client.chat.completions.create(
                 model=MODELS['openai'],
@@ -127,6 +135,8 @@ Quelle est la formule de la variance ?;;;$Var(X) = E[(X - E[X])^2] = E[X^2] - (E
         else:
             return None, f"Provider API non reconnu: {API_PROVIDER}"
 
+        print(f"✅ Réponse reçue de l'API, parsing des flashcards...")
+
         # Parser les flashcards
         flashcards = []
         lignes = contenu.strip().split('\n')
@@ -140,12 +150,46 @@ Quelle est la formule de la variance ?;;;$Var(X) = E[(X - E[X])^2] = E[X^2] - (E
                         flashcards.append({'question': question, 'reponse': reponse})
 
         if not flashcards:
+            print(f"❌ Aucune flashcard extraite. Contenu reçu:\n{contenu[:500]}")
             return None, "Aucune flashcard n'a pu être extraite. Format de réponse incorrect."
 
+        print(f"✅ {len(flashcards)} flashcards générées avec succès")
         return flashcards, None
 
     except Exception as e:
+        print(f"❌ Erreur lors de la génération: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None, f"Erreur lors de la génération ({API_PROVIDER}): {str(e)}"
+
+
+def generer_flashcards_exemple(nb_flashcards=10):
+    """Génère des flashcards d'exemple pour tester le système (sans API)"""
+    exemples = [
+        {'question': "Qu'est-ce qu'une variable aléatoire ?",
+         'reponse': "Une fonction qui associe à chaque issue d'une expérience aléatoire un nombre réel"},
+        {'question': "Quelle est la formule de la variance ?",
+         'reponse': "$Var(X) = E[(X - E[X])^2] = E[X^2] - (E[X])^2$"},
+        {'question': "Qu'est-ce qu'une loi normale ?",
+         'reponse': "Une loi de probabilité continue caractérisée par sa moyenne $\\mu$ et son écart-type $\\sigma$"},
+        {'question': "Qu'est-ce que l'espérance mathématique ?",
+         'reponse': "La moyenne pondérée des valeurs que peut prendre une variable aléatoire"},
+        {'question': "Qu'est-ce qu'un événement ?",
+         'reponse': "Un sous-ensemble de l'ensemble des issues possibles d'une expérience aléatoire"},
+        {'question': "Qu'est-ce que la probabilité conditionnelle ?",
+         'reponse': "La probabilité qu'un événement se produise sachant qu'un autre événement s'est produit"},
+        {'question': "Qu'est-ce qu'un échantillon ?",
+         'reponse': "Un sous-ensemble d'une population sélectionné pour être étudié"},
+        {'question': "Qu'est-ce que l'écart-type ?",
+         'reponse': "La racine carrée de la variance, mesure de la dispersion des données"},
+        {'question': "Qu'est-ce qu'une loi binomiale ?",
+         'reponse': "Loi de probabilité du nombre de succès dans une série d'épreuves indépendantes"},
+        {'question': "Qu'est-ce que la médiane ?",
+         'reponse': "La valeur qui partage une distribution en deux parties égales"},
+    ]
+
+    # Retourner le nombre demandé de flashcards
+    return exemples[:min(nb_flashcards, len(exemples))]
 
 def sauvegarder_flashcards_db(flashcards, nom_deck, user_id):
     """Sauvegarde les flashcards générées dans la base de données pour un utilisateur"""
@@ -399,9 +443,13 @@ def generer_flashcards_from_pdf():
     """Endpoint API pour générer des flashcards à partir d'un PDF"""
     try:
         data = request.get_json()
+        print(f"\n{'='*60}")
+        print(f"🚀 GÉNÉRATION DE FLASHCARDS - Nouvelle requête")
+        print(f"{'='*60}")
 
         # Récupération de l'utilisateur courant
         user_id = session.get('user_id')
+        print(f"👤 User ID: {user_id}")
 
         # Récupération des paramètres
         pdf_filename = data.get('pdf_filename')
@@ -410,7 +458,13 @@ def generer_flashcards_from_pdf():
         nb_flashcards = int(data.get('nb_flashcards', 10))
         nom_deck = data.get('nom_deck')
 
+        print(f"📄 PDF: {pdf_filename}")
+        print(f"📁 Catégorie: {categorie}, Source: {source}")
+        print(f"🎴 Nombre demandé: {nb_flashcards}")
+        print(f"📦 Nom du deck: {nom_deck}")
+
         if not pdf_filename or not nom_deck:
+            print("❌ Paramètres manquants")
             return jsonify({
                 'success': False,
                 'error': 'Paramètres manquants (pdf_filename, nom_deck requis)'
@@ -418,50 +472,76 @@ def generer_flashcards_from_pdf():
 
         # Construction du chemin du PDF
         pdf_path = os.path.join(BASE_DIR, 'static/pdfs', categorie, source, pdf_filename)
+        print(f"🔍 Chemin PDF: {pdf_path}")
 
         if not os.path.exists(pdf_path):
+            print(f"❌ Fichier PDF non trouvé: {pdf_path}")
             return jsonify({
                 'success': False,
                 'error': f'Fichier PDF non trouvé: {pdf_filename}'
             }), 404
 
+        print("✅ PDF trouvé, extraction du texte...")
         # Extraction du texte
         texte = extraire_texte_pdf(pdf_path)
         if not texte:
+            print("❌ Impossible d'extraire le texte")
             return jsonify({
                 'success': False,
                 'error': 'Impossible d\'extraire le texte du PDF'
             }), 500
 
+        print(f"✅ Texte extrait ({len(texte)} caractères)")
+        print(f"🤖 Génération des flashcards avec {API_PROVIDER}...")
+
         # Génération des flashcards
         flashcards, error = generer_flashcards_via_api(texte, nb_flashcards)
         if error:
+            print(f"❌ Erreur de génération: {error}")
             return jsonify({
                 'success': False,
                 'error': error
             }), 500
 
         if not flashcards:
+            print("❌ Aucune flashcard générée")
             return jsonify({
                 'success': False,
                 'error': 'Aucune flashcard générée'
             }), 500
 
+        print(f"✅ {len(flashcards)} flashcards générées")
+        print(f"💾 Sauvegarde dans la base de données...")
+
         # Sauvegarde dans la base de données SQLite
         if sauvegarder_flashcards_db(flashcards, nom_deck, user_id):
+            print(f"✅ Sauvegarde réussie! Deck: {nom_deck}")
+            print(f"{'='*60}\n")
+
+            # Message selon si c'est avec API ou exemples
+            if GOOGLE_API_KEY == 'votre-cle-api-gemini-ici' and API_PROVIDER == 'gemini':
+                message_prefix = "⚠️ MODE TEST: "
+            else:
+                message_prefix = ""
+
             return jsonify({
                 'success': True,
-                'message': f'{len(flashcards)} flashcards générées avec succès',
+                'message': f'{message_prefix}{len(flashcards)} flashcards générées avec succès',
                 'deck_name': nom_deck,
-                'nb_flashcards': len(flashcards)
+                'nb_flashcards': len(flashcards),
+                'api_provider': API_PROVIDER
             })
         else:
+            print("❌ Erreur lors de la sauvegarde")
             return jsonify({
                 'success': False,
                 'error': 'Erreur lors de la sauvegarde des flashcards'
             }), 500
 
     except Exception as e:
+        print(f"❌ ERREUR SERVEUR: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
             'error': f'Erreur serveur: {str(e)}'
