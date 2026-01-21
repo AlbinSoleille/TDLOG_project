@@ -5,7 +5,9 @@ from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from PyPDF2 import PdfReader
-from openai import OpenAI
+
+# Importer la configuration
+from config import API_PROVIDER, ANTHROPIC_API_KEY, GOOGLE_API_KEY, OPENAI_API_KEY, MODELS
 
 # Importer les fonctions de la base de données
 from database import (
@@ -53,15 +55,10 @@ def extraire_texte_pdf(pdf_path):
         print(f"Erreur lors de l'extraction du PDF: {e}")
         return None
 
-def generer_flashcards_via_api(texte, nb_flashcards=10, api_key=None):
-    """Génère des flashcards à partir du texte extrait en utilisant OpenAI"""
-    if not api_key:
-        return None, "Clé API OpenAI non configurée"
+def generer_flashcards_via_api(texte, nb_flashcards=10):
+    """Génère des flashcards à partir du texte extrait en utilisant l'API configurée"""
 
-    try:
-        client = OpenAI(api_key=api_key)
-
-        prompt = f"""Tu es un assistant pédagogique. À partir du texte suivant, génère exactement {nb_flashcards} flashcards de qualité pour aider l'étudiant à mémoriser les concepts clés.
+    prompt = f"""Tu es un assistant pédagogique. À partir du texte suivant, génère exactement {nb_flashcards} flashcards de qualité pour aider l'étudiant à mémoriser les concepts clés.
 
 Texte du cours:
 {texte[:8000]}
@@ -78,17 +75,57 @@ Exemple de format attendu:
 Qu'est-ce qu'une variable aléatoire ?;;;Une fonction qui associe à chaque issue d'une expérience aléatoire un nombre réel
 Quelle est la formule de la variance ?;;;$Var(X) = E[(X - E[X])^2] = E[X^2] - (E[X])^2$"""
 
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "Tu es un assistant pédagogique expert en création de flashcards."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.7,
-            max_tokens=2000
-        )
+    try:
+        if API_PROVIDER == 'claude':
+            # Utiliser l'API Claude (Anthropic)
+            from anthropic import Anthropic
 
-        contenu = response.choices[0].message.content
+            if ANTHROPIC_API_KEY == 'votre-cle-api-claude-ici':
+                return None, "⚠️ Veuillez configurer votre clé API Claude dans config.py"
+
+            client = Anthropic(api_key=ANTHROPIC_API_KEY)
+            response = client.messages.create(
+                model=MODELS['claude'],
+                max_tokens=2000,
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }]
+            )
+            contenu = response.content[0].text
+
+        elif API_PROVIDER == 'gemini':
+            # Utiliser l'API Gemini (Google)
+            import google.generativeai as genai
+
+            if GOOGLE_API_KEY == 'votre-cle-api-gemini-ici':
+                return None, "⚠️ Veuillez configurer votre clé API Gemini dans config.py"
+
+            genai.configure(api_key=GOOGLE_API_KEY)
+            model = genai.GenerativeModel(MODELS['gemini'])
+            response = model.generate_content(prompt)
+            contenu = response.text
+
+        elif API_PROVIDER == 'openai':
+            # Utiliser l'API OpenAI
+            from openai import OpenAI
+
+            if OPENAI_API_KEY == 'votre-cle-api-openai-ici':
+                return None, "⚠️ Veuillez configurer votre clé API OpenAI dans config.py"
+
+            client = OpenAI(api_key=OPENAI_API_KEY)
+            response = client.chat.completions.create(
+                model=MODELS['openai'],
+                messages=[
+                    {"role": "system", "content": "Tu es un assistant pédagogique expert en création de flashcards."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=2000
+            )
+            contenu = response.choices[0].message.content
+        else:
+            return None, f"Provider API non reconnu: {API_PROVIDER}"
 
         # Parser les flashcards
         flashcards = []
@@ -102,10 +139,13 @@ Quelle est la formule de la variance ?;;;$Var(X) = E[(X - E[X])^2] = E[X^2] - (E
                     if question and reponse:
                         flashcards.append({'question': question, 'reponse': reponse})
 
+        if not flashcards:
+            return None, "Aucune flashcard n'a pu être extraite. Format de réponse incorrect."
+
         return flashcards, None
 
     except Exception as e:
-        return None, f"Erreur lors de la génération: {str(e)}"
+        return None, f"Erreur lors de la génération ({API_PROVIDER}): {str(e)}"
 
 def sauvegarder_flashcards_db(flashcards, nom_deck, user_id):
     """Sauvegarde les flashcards générées dans la base de données pour un utilisateur"""
@@ -368,13 +408,12 @@ def generer_flashcards_from_pdf():
         categorie = data.get('categorie', 'cours')  # 'cours' ou 'fiches'
         source = data.get('source', 'uploads')  # 'uploads' ou 'originaux'
         nb_flashcards = int(data.get('nb_flashcards', 10))
-        api_key = data.get('api_key')
         nom_deck = data.get('nom_deck')
 
-        if not pdf_filename or not api_key or not nom_deck:
+        if not pdf_filename or not nom_deck:
             return jsonify({
                 'success': False,
-                'error': 'Paramètres manquants (pdf_filename, api_key, nom_deck requis)'
+                'error': 'Paramètres manquants (pdf_filename, nom_deck requis)'
             }), 400
 
         # Construction du chemin du PDF
@@ -395,7 +434,7 @@ def generer_flashcards_from_pdf():
             }), 500
 
         # Génération des flashcards
-        flashcards, error = generer_flashcards_via_api(texte, nb_flashcards, api_key)
+        flashcards, error = generer_flashcards_via_api(texte, nb_flashcards)
         if error:
             return jsonify({
                 'success': False,

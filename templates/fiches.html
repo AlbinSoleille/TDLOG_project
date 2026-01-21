@@ -110,16 +110,7 @@
                             <label for="nbFlashcards" class="form-label fw-bold">Nombre de flashcards</label>
                             <input type="number" class="form-control" id="nbFlashcards" name="nbFlashcards"
                                    value="10" min="5" max="30" required>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="apiKey" class="form-label fw-bold">Clé API OpenAI</label>
-                            <input type="password" class="form-control" id="apiKey" name="apiKey"
-                                   placeholder="sk-..." required>
-                            <small class="text-muted">
-                                Votre clé API OpenAI. Elle ne sera pas sauvegardée.
-                                <a href="https://platform.openai.com/api-keys" target="_blank">Obtenir une clé</a>
-                            </small>
+                            <small class="text-muted">Entre 5 et 30 flashcards</small>
                         </div>
                     </form>
                 </div>
@@ -182,17 +173,16 @@
             const source = document.getElementById('source').value;
             const nomDeck = document.getElementById('nomDeck').value.trim();
             const nbFlashcards = document.getElementById('nbFlashcards').value;
-            const apiKey = document.getElementById('apiKey').value.trim();
 
-            if (!nomDeck || !apiKey) {
-                afficherMessage('Veuillez remplir tous les champs', 'warning');
+            if (!nomDeck) {
+                afficherMessage('Veuillez remplir le nom du deck', 'warning');
                 return;
             }
 
             // Désactiver le bouton et afficher le spinner
             btnGenerer.disabled = true;
             btnText.classList.add('d-none');
-            btnSpinner.classList.remove('d-none');
+            btnSpinner.classList.remove('d-ne');
 
             try {
                 const response = await fetch('/api/generer-flashcards', {
@@ -205,7 +195,6 @@
                         categorie: categorie,
                         source: source,
                         nb_flashcards: parseInt(nbFlashcards),
-                        api_key: apiKey,
                         nom_deck: nomDeck
                     })
                 });
