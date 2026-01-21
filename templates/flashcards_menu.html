@@ -9,13 +9,13 @@
     <div class="list-group shadow-sm">
         {% if decks|length == 0 %}
             <div class="alert alert-warning">
-                Aucun fichier .csv trouvé dans le dossier <code>flashcards_data</code> !
+                Aucun deck de flashcards disponible. Générez-en depuis vos cours PDF !
             </div>
         {% else %}
             {% for deck in decks %}
-                <a href="{{ url_for('flashcards_play', deck=deck) }}" 
+                <a href="{{ url_for('flashcards_play', deck=deck.name) }}"
                    class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3">
-                    <span class="fs-5 fw-bold text-dark">🎴 {{ deck }}</span>
+                    <span class="fs-5 fw-bold text-dark">🎴 {{ deck.name }}</span>
                     <span class="badge bg-primary rounded-pill">Jouer ➡️</span>
                 </a>
             {% endfor %}

@@ -10,7 +10,7 @@ from openai import OpenAI
 # Importer les fonctions de la base de données
 from database import (
     init_database, get_user_by_username, create_user,
-    get_all_decks, get_deck_by_name, create_deck,
+    get_all_decks, get_user_decks, get_deck_by_name, create_deck,
     get_flashcards_by_deck, create_flashcard,
     get_all_user_progress, update_progress, get_user_progress
 )
@@ -107,11 +107,11 @@ Quelle est la formule de la variance ?;;;$Var(X) = E[(X - E[X])^2] = E[X^2] - (E
     except Exception as e:
         return None, f"Erreur lors de la génération: {str(e)}"
 
-def sauvegarder_flashcards_db(flashcards, nom_deck):
-    """Sauvegarde les flashcards générées dans la base de données"""
+def sauvegarder_flashcards_db(flashcards, nom_deck, user_id):
+    """Sauvegarde les flashcards générées dans la base de données pour un utilisateur"""
     try:
-        # Créer ou récupérer le deck
-        deck_id = create_deck(nom_deck)
+        # Créer ou récupérer le deck pour cet utilisateur
+        deck_id = create_deck(nom_deck, user_id)
 
         # Ajouter les flashcards
         for card in flashcards:
@@ -281,8 +281,9 @@ def fiches():
 @app.route('/flashcards')
 @login_required
 def flashcards_menu():
-    """Affiche la liste des decks"""
-    decks = get_all_decks()
+    """Affiche la liste des decks de l'utilisateur"""
+    user_id = session.get('user_id')
+    decks = get_user_decks(user_id)
     # Convertir les Row en dictionnaires pour le template
     decks_list = [{'id': d['id'], 'name': d['name']} for d in decks]
     return render_template('flashcards_menu.html', decks=decks_list, page='flashcards')
@@ -359,6 +360,9 @@ def generer_flashcards_from_pdf():
     try:
         data = request.get_json()
 
+        # Récupération de l'utilisateur courant
+        user_id = session.get('user_id')
+
         # Récupération des paramètres
         pdf_filename = data.get('pdf_filename')
         categorie = data.get('categorie', 'cours')  # 'cours' ou 'fiches'
@@ -405,7 +409,7 @@ def generer_flashcards_from_pdf():
             }), 500
 
         # Sauvegarde dans la base de données SQLite
-        if sauvegarder_flashcards_db(flashcards, nom_deck):
+        if sauvegarder_flashcards_db(flashcards, nom_deck, user_id):
             return jsonify({
                 'success': True,
                 'message': f'{len(flashcards)} flashcards générées avec succès',
