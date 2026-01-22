@@ -21,7 +21,8 @@ from database import (
     get_deck_statistics, rename_folder, delete_folder,
     get_user_streak, update_daily_activity, get_yearly_activity,
     get_leaderboard, toggle_leaderboard_visibility, can_see_leaderboard,
-    get_show_in_leaderboard
+    get_show_in_leaderboard, get_user_security_question, verify_security_answer,
+    update_user_password
 )
 
 # Importer l'algorithme Anki
@@ -361,10 +362,20 @@ def register():
     if 'user' in session:
         return redirect(url_for('cours'))
 
+    # Questions de sécurité disponibles
+    security_questions = [
+        "Quel est le nom de famille de votre mère ?",
+        "Quel est le nom de votre premier animal de compagnie ?",
+        "Quelle est votre ville de naissance ?",
+        "Quel est votre film préféré ?"
+    ]
+
     if request.method == 'POST':
         username = request.form.get('username', '').strip().lower()
         password = request.form.get('password', '')
         password_confirm = request.form.get('password_confirm', '')
+        security_question = request.form.get('security_question', '')
+        security_answer = request.form.get('security_answer', '').strip().lower()
 
         # Validations
         if not username or not password:
@@ -375,23 +386,91 @@ def register():
             flash("Le mot de passe doit contenir au moins 4 caractères")
         elif password != password_confirm:
             flash("Les mots de passe ne correspondent pas")
+        elif not security_question or not security_answer:
+            flash("Veuillez choisir une question de sécurité et y répondre")
         elif get_user_by_username(username):
             flash("Cet identifiant est déjà pris")
         else:
             # Création du compte
             password_hash = generate_password_hash(password)
-            user_id = create_user(username, password_hash)
+            # Hash de la réponse de sécurité (en minuscule pour éviter les problèmes de casse)
+            security_answer_hash = generate_password_hash(security_answer)
+            user_id = create_user(username, password_hash, security_question, security_answer_hash)
             session['user'] = username
             session['user_id'] = user_id
             return redirect(url_for('cours'))
 
-    return render_template('register.html')
+    return render_template('register.html', security_questions=security_questions)
 
 @app.route('/logout')
 def logout():
     session.pop('user', None)
     session.pop('user_id', None)
     return redirect(url_for('login'))
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    """Page de récupération de mot de passe - Étape 1: demander le nom d'utilisateur"""
+    if 'user' in session:
+        return redirect(url_for('cours'))
+
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip().lower()
+
+        if not username:
+            flash("Veuillez entrer votre identifiant")
+        else:
+            user = get_user_by_username(username)
+            if not user:
+                flash("Aucun compte trouvé avec cet identifiant")
+            else:
+                # Rediriger vers la page de réponse à la question de sécurité
+                return redirect(url_for('reset_password', username=username))
+
+    return render_template('forgot_password.html')
+
+@app.route('/reset-password/<username>', methods=['GET', 'POST'])
+def reset_password(username):
+    """Page de récupération de mot de passe - Étape 2: répondre à la question et choisir nouveau mot de passe"""
+    if 'user' in session:
+        return redirect(url_for('cours'))
+
+    user = get_user_by_username(username)
+    if not user:
+        flash("Utilisateur introuvable")
+        return redirect(url_for('forgot_password'))
+
+    security_question = get_user_security_question(username)
+    if not security_question:
+        flash("Aucune question de sécurité configurée pour ce compte")
+        return redirect(url_for('forgot_password'))
+
+    if request.method == 'POST':
+        security_answer = request.form.get('security_answer', '').strip().lower()
+        new_password = request.form.get('new_password', '')
+        new_password_confirm = request.form.get('new_password_confirm', '')
+
+        # Validation
+        if not security_answer:
+            flash("Veuillez répondre à la question de sécurité")
+        elif not new_password:
+            flash("Veuillez entrer un nouveau mot de passe")
+        elif len(new_password) < 4:
+            flash("Le mot de passe doit contenir au moins 4 caractères")
+        elif new_password != new_password_confirm:
+            flash("Les mots de passe ne correspondent pas")
+        else:
+            # Vérifier la réponse de sécurité
+            if verify_security_answer(username, security_answer):
+                # Réponse correcte, mettre à jour le mot de passe
+                new_password_hash = generate_password_hash(new_password)
+                update_user_password(username, new_password_hash)
+                flash("Mot de passe réinitialisé avec succès ! Vous pouvez maintenant vous connecter.")
+                return redirect(url_for('login'))
+            else:
+                flash("Réponse incorrecte à la question de sécurité")
+
+    return render_template('reset_password.html', username=username, security_question=security_question)
 
 @app.route('/')
 def home():
