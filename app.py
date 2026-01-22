@@ -18,7 +18,10 @@ from database import (
     get_user_prompt, save_user_prompt, get_user_statistics,
     get_user_flashcard_counts, create_folder, get_user_folders,
     get_decks_in_folder, move_deck_to_folder, get_folder_statistics,
-    get_deck_statistics, rename_folder, delete_folder
+    get_deck_statistics, rename_folder, delete_folder,
+    get_user_streak, update_daily_activity, get_yearly_activity,
+    get_leaderboard, toggle_leaderboard_visibility, can_see_leaderboard,
+    get_show_in_leaderboard
 )
 
 # Importer l'algorithme Anki
@@ -35,6 +38,15 @@ os.makedirs(FLASHCARDS_DIR, exist_ok=True)
 
 # Initialiser la base de données au démarrage
 init_database()
+
+# --- CONTEXT PROCESSOR POUR LE STREAK ---
+@app.context_processor
+def inject_streak():
+    """Injecte le streak dans tous les templates"""
+    if 'user_id' in session:
+        streak = get_user_streak(session['user_id'])
+        return dict(streak=streak)
+    return dict(streak=0)
 
 # --- PROMPT PAR DÉFAUT POUR LA GÉNÉRATION DE FLASHCARDS ---
 DEFAULT_PROMPT_TEMPLATE = """Tu es un assistant pédagogique. À partir du texte suivant, génère exactement {nb_flashcards} flashcards de qualité pour aider l'étudiant à mémoriser les concepts clés.
@@ -582,6 +594,12 @@ def vote_card():
             new_card.repetitions
         )
 
+        # Mettre à jour l'activité quotidienne
+        # Vérifier si toutes les cartes dues sont terminées
+        stats = get_user_flashcard_counts(user_id)
+        all_completed = (stats['new'] == 0 and stats['relearn'] == 0 and stats['review'] == 0)
+        update_daily_activity(user_id, 1, all_completed)
+
     # Piocher la carte suivante
     nouvelle_carte = piocher_carte(deck_name, user_id)
     return render_template('card_fragment.html', carte=nouvelle_carte, current_deck=deck_name)
@@ -763,12 +781,129 @@ def prompt_settings():
 @login_required
 def statistics():
     """Page des statistiques de l'utilisateur"""
+    from datetime import datetime, date, timedelta
+    import calendar
+
     user_id = session.get('user_id')
     stats = get_user_statistics(user_id)
 
+    # Générer le calendrier annuel
+    year = datetime.now().year
+    activity_dict, max_cards = get_yearly_activity(user_id, year)
+
+    # Construire le calendrier par mois
+    calendar_data = []
+    for month in range(1, 13):
+        month_name = calendar.month_abbr[month]
+        # Obtenir le calendrier du mois (liste de semaines)
+        month_cal = calendar.monthcalendar(year, month)
+
+        weeks_data = []
+        for week in month_cal:
+            week_data = []
+            for day_num in week:
+                if day_num == 0:  # Jour vide
+                    week_data.append(None)
+                else:
+                    day_date = date(year, month, day_num)
+                    day_str = day_date.strftime('%Y-%m-%d')
+
+                    # Récupérer l'activité du jour
+                    activity = activity_dict.get(day_str, {'cards_reviewed': 0, 'all_completed': 0})
+                    cards = activity['cards_reviewed']
+                    completed = activity['all_completed']
+
+                    # Déterminer la couleur
+                    if cards == 0:
+                        color = '#ebedf0'  # Gris clair (aucune révision)
+                        status = 'no-activity'
+                    elif completed:
+                        # Vert avec intensité selon le nombre de cartes
+                        intensity = min(cards / max_cards, 1.0)
+                        if intensity < 0.25:
+                            color = '#9be9a8'
+                        elif intensity < 0.5:
+                            color = '#40c463'
+                        elif intensity < 0.75:
+                            color = '#30a14e'
+                        else:
+                            color = '#216e39'
+                        status = 'completed'
+                    else:
+                        # Bleu avec intensité selon le nombre de cartes
+                        intensity = min(cards / max_cards, 1.0)
+                        if intensity < 0.25:
+                            color = '#c6dbef'
+                        elif intensity < 0.5:
+                            color = '#9ecae1'
+                        elif intensity < 0.75:
+                            color = '#6baed6'
+                        else:
+                            color = '#3182bd'
+                        status = 'partial'
+
+                    week_data.append({
+                        'date': day_date.strftime('%d/%m/%Y'),
+                        'cards': cards,
+                        'completed': completed,
+                        'color': color,
+                        'status': status
+                    })
+
+            weeks_data.append(week_data)
+
+        calendar_data.append((month_name, weeks_data))
+
+    year_activity = {
+        'year': year,
+        'calendar': calendar_data
+    }
+
     return render_template('statistiques.html',
                           stats=stats,
+                          year_activity=year_activity,
                           page='parametres')
+
+
+@app.route('/parametres/classement')
+@login_required
+def leaderboard():
+    """Page du classement des utilisateurs"""
+    user_id = session.get('user_id')
+
+    # Vérifier si l'utilisateur peut voir le classement
+    can_view = can_see_leaderboard(user_id)
+
+    if can_view:
+        # Récupérer le classement
+        leaderboard_data = get_leaderboard()
+    else:
+        leaderboard_data = []
+
+    # Vérifier si l'utilisateur est visible
+    show_in_leaderboard = get_show_in_leaderboard(user_id)
+
+    return render_template('leaderboard.html',
+                          leaderboard=leaderboard_data,
+                          can_view=can_view,
+                          show_in_leaderboard=show_in_leaderboard,
+                          current_user_id=user_id,
+                          page='parametres')
+
+
+@app.route('/parametres/classement/toggle', methods=['POST'])
+@login_required
+def toggle_leaderboard_visibility_route():
+    """Active/désactive la visibilité de l'utilisateur dans le classement"""
+    user_id = session.get('user_id')
+    new_value = toggle_leaderboard_visibility(user_id)
+
+    if new_value:
+        flash('Vous apparaissez maintenant dans le classement.', 'success')
+    else:
+        flash('Vous avez été retiré du classement.', 'info')
+
+    return redirect(url_for('leaderboard'))
 
 
 @app.route('/api/supprimer-pdf', methods=['POST'])

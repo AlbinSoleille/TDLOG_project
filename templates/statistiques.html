@@ -40,6 +40,116 @@
         </div>
     </div>
 
+    <!-- Calendrier annuel -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">📅 Calendrier d'activité {{ year_activity.year }}</h5>
+        </div>
+        <div class="card-body">
+            <div class="activity-calendar">
+                {% for month_name, weeks in year_activity.calendar %}
+                <div class="month-container">
+                    <div class="month-label">{{ month_name }}</div>
+                    <div class="weeks-grid">
+                        {% for week in weeks %}
+                        <div class="week-row">
+                            {% for day in week %}
+                            {% if day %}
+                            <div class="day-cell {{ day.status }}"
+                                 style="background-color: {{ day.color }};"
+                                 title="{{ day.date }}: {{ day.cards }} carte(s) révisée(s){% if day.completed %} - Toutes les cartes terminées!{% endif %}">
+                            </div>
+                            {% else %}
+                            <div class="day-cell empty"></div>
+                            {% endif %}
+                            {% endfor %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="calendar-legend mt-3">
+                <small class="text-muted">
+                    <span class="legend-item"><span class="legend-box" style="background-color: #ebedf0;"></span> Aucune révision</span>
+                    <span class="legend-item"><span class="legend-box" style="background-color: #9be9a8;"></span> Révisions partielles</span>
+                    <span class="legend-item"><span class="legend-box" style="background-color: #40c463;"></span> Toutes les cartes terminées</span>
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .activity-calendar {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding: 10px 0;
+        }
+
+        .month-container {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .month-label {
+            font-size: 0.7rem;
+            font-weight: bold;
+            color: var(--text-secondary);
+            margin-bottom: 2px;
+        }
+
+        .weeks-grid {
+            display: flex;
+            gap: 2px;
+        }
+
+        .week-row {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .day-cell {
+            width: 11px;
+            height: 11px;
+            border-radius: 2px;
+            transition: all 0.2s;
+        }
+
+        .day-cell:not(.empty):hover {
+            transform: scale(1.3);
+            box-shadow: 0 0 4px rgba(0,0,0,0.3);
+            z-index: 10;
+            position: relative;
+        }
+
+        .day-cell.empty {
+            background-color: transparent;
+        }
+
+        .calendar-legend {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .legend-box {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            border: 1px solid #d1d5da;
+        }
+    </style>
+
     <!-- Activité du jour -->
     <div class="card mb-4 border-success">
         <div class="card-header bg-success text-white">

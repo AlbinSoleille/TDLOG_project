@@ -114,6 +114,20 @@ def init_database():
             )
         ''')
 
+        # Table d'historique quotidien pour les streaks
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS daily_activity (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                date DATE NOT NULL,
+                cards_reviewed INTEGER DEFAULT 0,
+                cards_due_completed INTEGER DEFAULT 0,
+                all_cards_completed INTEGER DEFAULT 0,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE(user_id, date)
+            )
+        ''')
+
         # Index pour améliorer les performances
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_flashcards_deck
@@ -138,6 +152,16 @@ def init_database():
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_folders_parent
             ON folders(parent_id)
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_daily_activity_user
+            ON daily_activity(user_id)
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_daily_activity_date
+            ON daily_activity(date)
         ''')
 
         print("✅ Base de données initialisée avec succès")
@@ -635,6 +659,240 @@ def get_deck_statistics(user_id, deck_id):
             'relearn': relearn_count,
             'review': review_count
         }
+
+
+# --- FONCTIONS POUR LES STREAKS ---
+
+def update_daily_activity(user_id, cards_reviewed, all_completed):
+    """Met à jour l'activité quotidienne de l'utilisateur"""
+    from datetime import datetime, date
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        today = date.today()
+
+        # Récupérer le nombre de cartes dues aujourd'hui
+        cursor.execute('''
+            SELECT COUNT(DISTINCT f.id) as cards_due
+            FROM flashcards f
+            INNER JOIN decks d ON f.deck_id = d.id
+            LEFT JOIN user_progress up ON f.id = up.flashcard_id AND up.user_id = ?
+            WHERE d.user_id = ?
+            AND (up.due_date IS NULL OR up.due_date <= datetime('now'))
+        ''', (user_id, user_id))
+        cards_due = cursor.fetchone()['cards_due']
+
+        # Mettre à jour ou créer l'entrée du jour
+        cursor.execute('''
+            INSERT INTO daily_activity
+                (user_id, date, cards_reviewed, cards_due_completed, all_cards_completed)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, date)
+            DO UPDATE SET
+                cards_reviewed = cards_reviewed + ?,
+                cards_due_completed = ?,
+                all_cards_completed = ?
+        ''', (user_id, today, cards_reviewed, cards_due, all_completed,
+              cards_reviewed, cards_due, all_completed))
+
+        # Mettre à jour le streak si toutes les cartes sont terminées
+        if all_completed:
+            update_streak(user_id)
+
+
+def update_streak(user_id):
+    """Met à jour le streak de l'utilisateur"""
+    from datetime import datetime, date, timedelta
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        today = date.today()
+
+        # Récupérer les infos actuelles de streak
+        cursor.execute(
+            'SELECT streak_count, last_streak_date FROM users WHERE id = ?',
+            (user_id,)
+        )
+        result = cursor.fetchone()
+        current_streak = result['streak_count'] or 0
+        last_date = result['last_streak_date']
+
+        # Si c'est le premier streak ou si last_date est None
+        if not last_date:
+            cursor.execute(
+                'UPDATE users SET streak_count = 1, last_streak_date = ? WHERE id = ?',
+                (today, user_id)
+            )
+            return 1
+
+        # Convertir last_date en objet date
+        if isinstance(last_date, str):
+            last_date = datetime.strptime(last_date, '%Y-%m-%d').date()
+
+        # Si c'était hier, on incrémente
+        if last_date == today - timedelta(days=1):
+            new_streak = current_streak + 1
+            cursor.execute(
+                'UPDATE users SET streak_count = ?, last_streak_date = ? WHERE id = ?',
+                (new_streak, today, user_id)
+            )
+            return new_streak
+        # Si c'est aujourd'hui, on garde le même
+        elif last_date == today:
+            return current_streak
+        # Sinon, le streak est cassé, on recommence à 1
+        else:
+            cursor.execute(
+                'UPDATE users SET streak_count = 1, last_streak_date = ? WHERE id = ?',
+                (today, user_id)
+            )
+            return 1
+
+
+def get_user_streak(user_id):
+    """Récupère le streak actuel de l'utilisateur"""
+    from datetime import date, timedelta
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT streak_count, last_streak_date FROM users WHERE id = ?',
+            (user_id,)
+        )
+        result = cursor.fetchone()
+
+        if not result:
+            return 0
+
+        streak = result['streak_count'] or 0
+        last_date = result['last_streak_date']
+
+        # Si pas de date ou si la dernière date est trop ancienne (> 1 jour), streak = 0
+        if not last_date:
+            return 0
+
+        from datetime import datetime
+        if isinstance(last_date, str):
+            last_date = datetime.strptime(last_date, '%Y-%m-%d').date()
+
+        # Si la dernière date n'est pas aujourd'hui ou hier, le streak est cassé
+        today = date.today()
+        if last_date < today - timedelta(days=1):
+            # Réinitialiser le streak
+            cursor.execute(
+                'UPDATE users SET streak_count = 0 WHERE id = ?',
+                (user_id,)
+            )
+            return 0
+
+        return streak
+
+
+def get_yearly_activity(user_id, year=None):
+    """Récupère l'activité de l'utilisateur pour une année complète"""
+    from datetime import datetime, date
+
+    if year is None:
+        year = date.today().year
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Récupérer toutes les activités de l'année
+        cursor.execute('''
+            SELECT date, cards_reviewed, all_cards_completed
+            FROM daily_activity
+            WHERE user_id = ?
+            AND strftime('%Y', date) = ?
+            ORDER BY date
+        ''', (user_id, str(year)))
+
+        activities = cursor.fetchall()
+
+        # Créer un dictionnaire pour un accès facile
+        activity_dict = {}
+        max_cards = 1  # Pour éviter la division par zéro
+
+        for activity in activities:
+            activity_dict[activity['date']] = {
+                'cards_reviewed': activity['cards_reviewed'],
+                'all_completed': activity['all_cards_completed']
+            }
+            if activity['cards_reviewed'] > max_cards:
+                max_cards = activity['cards_reviewed']
+
+        return activity_dict, max_cards
+
+
+def get_leaderboard():
+    """Récupère le classement des utilisateurs"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Calculer le score (cartes révisées totales × streak)
+        cursor.execute('''
+            SELECT
+                u.id,
+                u.username,
+                u.streak_count,
+                COALESCE(SUM(da.cards_reviewed), 0) as total_cards,
+                (COALESCE(SUM(da.cards_reviewed), 0) * COALESCE(u.streak_count, 0)) as score
+            FROM users u
+            LEFT JOIN daily_activity da ON u.id = da.user_id
+            WHERE u.show_in_leaderboard = 1
+            GROUP BY u.id, u.username, u.streak_count
+            ORDER BY score DESC, u.streak_count DESC
+            LIMIT 100
+        ''')
+
+        return cursor.fetchall()
+
+
+def toggle_leaderboard_visibility(user_id):
+    """Active/désactive la visibilité de l'utilisateur dans le classement"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Récupérer l'état actuel
+        cursor.execute(
+            'SELECT show_in_leaderboard FROM users WHERE id = ?',
+            (user_id,)
+        )
+        result = cursor.fetchone()
+        current = result['show_in_leaderboard'] if result else 1
+
+        # Inverser
+        new_value = 0 if current else 1
+        cursor.execute(
+            'UPDATE users SET show_in_leaderboard = ? WHERE id = ?',
+            (new_value, user_id)
+        )
+
+        return new_value
+
+
+def can_see_leaderboard(user_id):
+    """Vérifie si l'utilisateur peut voir le classement"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT show_in_leaderboard FROM users WHERE id = ?',
+            (user_id,)
+        )
+        result = cursor.fetchone()
+        return result['show_in_leaderboard'] == 1 if result else False
+
+
+def get_show_in_leaderboard(user_id):
+    """Récupère l'état de visibilité de l'utilisateur dans le classement"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT show_in_leaderboard FROM users WHERE id = ?',
+            (user_id,)
+        )
+        result = cursor.fetchone()
+        return result['show_in_leaderboard'] if result else 0
 
 
 if __name__ == '__main__':

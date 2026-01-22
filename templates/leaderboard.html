@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container" style="max-width: 900px;">
+    <h1 class="mb-4 mt-2">🏆 Classement</h1>
+
+    {% if can_view %}
+    <!-- Paramètres de visibilité -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1">Visibilité dans le classement</h6>
+                    <small class="text-muted">
+                        {% if show_in_leaderboard %}
+                            Vous êtes visible dans le classement
+                        {% else %}
+                            Vous n'apparaissez pas dans le classement
+                        {% endif %}
+                    </small>
+                </div>
+                <form method="POST" action="{{ url_for('toggle_leaderboard_visibility_route') }}">
+                    <button type="submit" class="btn btn-sm {{ 'btn-outline-danger' if show_in_leaderboard else 'btn-outline-success' }}">
+                        {% if show_in_leaderboard %}
+                            Masquer mon profil
+                        {% else %}
+                            Afficher mon profil
+                        {% endif %}
+                    </button>
+                </form>
+            </div>
+            {% if not show_in_leaderboard %}
+            <div class="alert alert-warning mt-3 mb-0">
+                <small>⚠️ En masquant votre profil, vous ne pourrez plus voir le classement.</small>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Explication du score -->
+    <div class="alert alert-info mb-4">
+        <small>
+            <strong>Comment est calculé le score ?</strong><br>
+            Score = Nombre total de cartes révisées × Nombre de jours de streak (🔥)<br>
+            Le streak augmente chaque jour où vous finissez toutes vos cartes à réviser.
+        </small>
+    </div>
+
+    <!-- Classement -->
+    <div class="card">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0">Top 100</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="text-center" style="width: 60px;">#</th>
+                            <th>Utilisateur</th>
+                            <th class="text-center">Cartes révisées</th>
+                            <th class="text-center">Streak 🔥</th>
+                            <th class="text-center">Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if leaderboard|length == 0 %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">
+                                Aucun utilisateur dans le classement pour le moment.
+                            </td>
+                        </tr>
+                        {% else %}
+                        {% for user in leaderboard %}
+                        <tr class="{{ 'table-primary' if user.id == current_user_id else '' }}">
+                            <td class="text-center">
+                                {% if loop.index == 1 %}
+                                    <span class="fs-4">🥇</span>
+                                {% elif loop.index == 2 %}
+                                    <span class="fs-4">🥈</span>
+                                {% elif loop.index == 3 %}
+                                    <span class="fs-4">🥉</span>
+                                {% else %}
+                                    <strong>{{ loop.index }}</strong>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <strong>{{ user.username }}</strong>
+                                {% if user.id == current_user_id %}
+                                    <span class="badge bg-primary ms-2">Vous</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">{{ user.total_cards }}</td>
+                            <td class="text-center">
+                                <span class="badge {{ 'bg-success' if user.streak_count > 0 else 'bg-secondary' }}">
+                                    {{ user.streak_count or 0 }}
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                <strong class="text-warning">{{ user.score }}</strong>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- Message si l'utilisateur ne peut pas voir le classement -->
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <h3 class="mb-3">🔒 Classement non disponible</h3>
+            <p class="text-muted mb-4">
+                Vous devez apparaître dans le classement pour pouvoir le consulter.<br>
+                Activez votre visibilité pour accéder au classement.
+            </p>
+            <form method="POST" action="{{ url_for('toggle_leaderboard_visibility_route') }}">
+                <button type="submit" class="btn btn-success">
+                    Apparaître dans le classement
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Retour -->
+    <div class="text-center mt-4 mb-4">
+        <a href="{{ url_for('parametres') }}" class="btn btn-secondary">
+            Retour aux paramètres
+        </a>
+    </div>
+</div>
+{% endblock %}

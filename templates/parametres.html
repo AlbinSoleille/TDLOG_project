@@ -56,6 +56,19 @@
         </div>
     </div>
 
+    <!-- Classement -->
+    <div class="card mb-4">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0">🏆 Classement</h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-3">Comparez vos performances avec les autres utilisateurs</p>
+            <a href="{{ url_for('leaderboard') }}" class="btn btn-warning">
+                Voir le classement
+            </a>
+        </div>
+    </div>
+
     <!-- Retour -->
     <div class="text-center mt-4">
         <a href="{{ url_for('accueil') }}" class="btn btn-secondary">
