@@ -417,12 +417,37 @@ def cours():
     if res == True: return redirect(url_for('cours'))
     return render_template('cours.html', originaux=res[0], uploads=res[1], page='cours')
 
-@app.route('/fiches', methods=['GET', 'POST'])
+@app.route('/fiches', methods=['GET'])
 @login_required
 def fiches():
-    res = gestion_dossier('fiches')
-    if res == True: return redirect(url_for('fiches'))
-    return render_template('fiches.html', originaux=res[0], uploads=res[1], page='fiches')
+    """Affiche les fiches résumé générées"""
+    from datetime import datetime
+
+    fiches_dir = os.path.join(BASE_DIR, 'static/fiches')
+    fiches_list = []
+
+    # Lister tous les fichiers .md dans le dossier fiches
+    if os.path.exists(fiches_dir):
+        for filename in os.listdir(fiches_dir):
+            if filename.endswith('.md') and filename != 'README.md':
+                filepath = os.path.join(fiches_dir, filename)
+                # Récupérer la date de création
+                timestamp = os.path.getctime(filepath)
+                date_creation = datetime.fromtimestamp(timestamp).strftime('%d/%m/%Y %H:%M')
+
+                # Nom lisible (enlever .md et remplacer _ par espace)
+                name = filename.replace('.md', '').replace('_', ' ').replace('resume ', '').title()
+
+                fiches_list.append({
+                    'filename': filename,
+                    'name': name,
+                    'date': date_creation
+                })
+
+    # Trier par date de création (plus récent en premier)
+    fiches_list.sort(key=lambda x: x['date'], reverse=True)
+
+    return render_template('fiches.html', fiches=fiches_list, page='fiches')
 
 # --- ROUTES FLASHCARDS ---
 
@@ -904,6 +929,53 @@ def toggle_leaderboard_visibility_route():
         flash('Vous avez été retiré du classement.', 'info')
 
     return redirect(url_for('leaderboard'))
+
+
+@app.route('/api/supprimer-fiche', methods=['POST'])
+@login_required
+def supprimer_fiche():
+    """Endpoint API pour supprimer une fiche résumé"""
+    try:
+        data = request.get_json()
+        filename = data.get('filename')
+
+        if not filename:
+            return jsonify({
+                'success': False,
+                'error': 'Nom de fichier requis'
+            }), 400
+
+        # Vérifier que c'est bien un fichier .md
+        if not filename.endswith('.md'):
+            return jsonify({
+                'success': False,
+                'error': 'Seuls les fichiers .md peuvent être supprimés'
+            }), 403
+
+        # Construction du chemin de la fiche
+        fiche_path = os.path.join(BASE_DIR, 'static/fiches', filename)
+
+        if not os.path.exists(fiche_path):
+            return jsonify({
+                'success': False,
+                'error': f'Fiche non trouvée: {filename}'
+            }), 404
+
+        # Supprimer le fichier
+        os.remove(fiche_path)
+        print(f"✅ Fiche supprimée: {fiche_path}")
+
+        return jsonify({
+            'success': True,
+            'message': f'Fiche "{filename}" supprimée avec succès'
+        })
+
+    except Exception as e:
+        print(f"❌ Erreur lors de la suppression de la fiche: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 @app.route('/api/supprimer-pdf', methods=['POST'])
