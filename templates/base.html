@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Mon Appli Scolaire</title>
+    <title>oboe</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     
     <script src="https://unpkg.com/htmx.org@1.9.6"></script>
@@ -206,10 +206,17 @@
             cursor: pointer;
             transition: background-color 0.2s;
             color: var(--text-primary);
+            outline: none;
+            border: none;
         }
 
         .theme-option:hover {
             background-color: var(--bg-secondary);
+        }
+
+        .theme-option:focus {
+            outline: none;
+            box-shadow: none;
         }
 
         .theme-option.active {
@@ -217,24 +224,7 @@
             font-weight: 500;
         }
 
-        .theme-icon {
-            width: 20px;
-            height: 20px;
-            border-radius: 4px;
-            border: 1px solid var(--border-color);
-        }
-
-        .theme-icon-light {
-            background: linear-gradient(135deg, #ffffff 50%, #f8f9fa 50%);
-        }
-
-        .theme-icon-dark {
-            background: linear-gradient(135deg, #212529 50%, #0f1115 50%);
-        }
-
-        .theme-icon-gray {
-            background: linear-gradient(135deg, #dee2e6 50%, #adb5bd 50%);
-        }
+        /* Icônes de thème supprimées pour sobriété */
 
         /* Mobile settings button */
         .mobile-settings {
@@ -296,7 +286,7 @@
     <nav class="navbar navbar-dark bg-primary fixed-top d-none d-md-block">
         <div class="container d-flex justify-content-between align-items-center">
             
-            <a class="navbar-brand fw-bold" href="{{ url_for('cours') }}">🎓 Mon Appli</a>
+            <a class="navbar-brand fw-bold" href="{{ url_for('cours') }}">oboe</a>
 
             <div class="d-flex gap-3 align-items-center">
                 <a class="btn {% if page == 'cours' %}btn-light text-primary{% else %}btn-outline-light{% endif %}" 
@@ -316,20 +306,17 @@
                     <div class="settings-menu" id="settingsMenu">
                         <!-- Thème (cliquable pour dévoiler les options) -->
                         <div class="theme-header" onclick="toggleThemeSubmenu(event)">
-                            <span>🎨 Thème</span>
+                            <span>Thème</span>
                             <span class="theme-arrow" id="themeArrow">▶</span>
                         </div>
                         <div class="theme-submenu" id="themeSubmenu">
                             <div class="theme-option" onclick="setTheme('light')">
-                                <div class="theme-icon theme-icon-light"></div>
                                 <span>Clair</span>
                             </div>
                             <div class="theme-option" onclick="setTheme('dark')">
-                                <div class="theme-icon theme-icon-dark"></div>
                                 <span>Sombre</span>
                             </div>
                             <div class="theme-option" onclick="setTheme('gray')">
-                                <div class="theme-icon theme-icon-gray"></div>
                                 <span>Gris</span>
                             </div>
                         </div>
@@ -339,18 +326,18 @@
 
                         <!-- Prompt -->
                         <a href="{{ url_for('prompt_settings') }}" class="theme-option" style="color: inherit; text-decoration: none;">
-                            <span>🤖 Prompt IA</span>
+                            <span>Prompt IA</span>
                         </a>
 
                         <!-- Statistiques -->
                         <a href="{{ url_for('statistics') }}" class="theme-option" style="color: inherit; text-decoration: none;">
-                            <span>📊 Statistiques</span>
+                            <span>Statistiques</span>
                         </a>
 
                         <!-- Tous les paramètres -->
                         <hr class="my-2">
                         <a href="{{ url_for('parametres') }}" class="theme-option" style="color: inherit; text-decoration: none;">
-                            <span>⚙️ Tous les paramètres</span>
+                            <span>Paramètres</span>
                         </a>
                     </div>
                 </div>
@@ -375,18 +362,15 @@
         <div class="d-flex justify-content-around py-2">
             
             <a href="{{ url_for('cours') }}" class="nav-link text-center {% if page == 'cours' %}active{% endif %}">
-                <div class="fs-4">📚</div>
-                <small style="font-size: 0.7rem;">Cours</small>
+                <small>Cours</small>
             </a>
 
             <a href="{{ url_for('flashcards_menu') }}" class="nav-link text-center {% if page == 'flashcards' %}active{% endif %}">
-                <div class="fs-4">⚡</div>
-                <small style="font-size: 0.7rem;">Flashcards</small>
+                <small>Flashcards</small>
             </a>
 
             <a href="{{ url_for('fiches') }}" class="nav-link text-center {% if page == 'fiches' %}active{% endif %}">
-                <div class="fs-4">📝</div>
-                <small style="font-size: 0.7rem;">Fiches</small>
+                <small>Fiches</small>
             </a>
         </div>
     </nav>
@@ -399,20 +383,17 @@
         <div class="mobile-settings-menu" id="mobileSettingsMenu">
             <!-- Thème (cliquable pour dévoiler les options) -->
             <div class="theme-header" onclick="toggleMobileThemeSubmenu(event)">
-                <span>🎨 Thème</span>
+                <span>Thème</span>
                 <span class="theme-arrow" id="mobileThemeArrow">▶</span>
             </div>
             <div class="theme-submenu" id="mobileThemeSubmenu">
                 <div class="theme-option" onclick="setTheme('light')">
-                    <div class="theme-icon theme-icon-light"></div>
                     <span>Clair</span>
                 </div>
                 <div class="theme-option" onclick="setTheme('dark')">
-                    <div class="theme-icon theme-icon-dark"></div>
                     <span>Sombre</span>
                 </div>
                 <div class="theme-option" onclick="setTheme('gray')">
-                    <div class="theme-icon theme-icon-gray"></div>
                     <span>Gris</span>
                 </div>
             </div>
@@ -422,18 +403,18 @@
 
             <!-- Prompt -->
             <a href="{{ url_for('prompt_settings') }}" class="theme-option" style="color: inherit; text-decoration: none;">
-                <span>🤖 Prompt IA</span>
+                <span>Prompt IA</span>
             </a>
 
             <!-- Statistiques -->
             <a href="{{ url_for('statistics') }}" class="theme-option" style="color: inherit; text-decoration: none;">
-                <span>📊 Statistiques</span>
+                <span>Statistiques</span>
             </a>
 
             <!-- Tous les paramètres -->
             <hr class="my-2">
             <a href="{{ url_for('parametres') }}" class="theme-option" style="color: inherit; text-decoration: none;">
-                <span>⚙️ Tous les paramètres</span>
+                <span>Paramètres</span>
             </a>
         </div>
     </div>

@@ -15,7 +15,10 @@ from database import (
     get_all_decks, get_user_decks, get_deck_by_name, create_deck,
     get_flashcards_by_deck, create_flashcard,
     get_all_user_progress, update_progress, get_user_progress,
-    get_user_prompt, save_user_prompt, get_user_statistics
+    get_user_prompt, save_user_prompt, get_user_statistics,
+    get_user_flashcard_counts, create_folder, get_user_folders,
+    get_decks_in_folder, move_deck_to_folder, get_folder_statistics,
+    get_deck_statistics, rename_folder, delete_folder
 )
 
 # Importer l'algorithme Anki
@@ -382,15 +385,114 @@ def fiches():
 
 # --- ROUTES FLASHCARDS ---
 
+def build_folder_tree(user_id, parent_id=None):
+    """Construit récursivement l'arborescence des dossiers avec leurs statistiques"""
+    folders = get_user_folders(user_id, parent_id)
+    result = []
+
+    for folder in folders:
+        folder_dict = {
+            'id': folder['id'],
+            'name': folder['name'],
+            'type': 'folder',
+            'stats': get_folder_statistics(user_id, folder['id']),
+            'children': build_folder_tree(user_id, folder['id']),
+            'decks': []
+        }
+
+        # Récupérer les decks dans ce dossier
+        decks = get_decks_in_folder(user_id, folder['id'])
+        for deck in decks:
+            folder_dict['decks'].append({
+                'id': deck['id'],
+                'name': deck['name'],
+                'type': 'deck',
+                'stats': get_deck_statistics(user_id, deck['id'])
+            })
+
+        result.append(folder_dict)
+
+    return result
+
+
 @app.route('/flashcards')
 @login_required
 def flashcards_menu():
-    """Affiche la liste des decks de l'utilisateur"""
+    """Affiche la liste des decks de l'utilisateur avec arborescence"""
     user_id = session.get('user_id')
-    decks = get_user_decks(user_id)
-    # Convertir les Row en dictionnaires pour le template
-    decks_list = [{'id': d['id'], 'name': d['name']} for d in decks]
-    return render_template('flashcards_menu.html', decks=decks_list, page='flashcards')
+
+    # Construire l'arborescence des dossiers
+    folder_tree = build_folder_tree(user_id)
+
+    # Récupérer les decks à la racine (sans dossier)
+    root_decks = get_decks_in_folder(user_id, None)
+    root_decks_list = []
+    for deck in root_decks:
+        root_decks_list.append({
+            'id': deck['id'],
+            'name': deck['name'],
+            'type': 'deck',
+            'stats': get_deck_statistics(user_id, deck['id'])
+        })
+
+    # Récupérer les statistiques globales
+    global_stats = get_user_flashcard_counts(user_id)
+
+    return render_template('flashcards_menu.html',
+                         folder_tree=folder_tree,
+                         root_decks=root_decks_list,
+                         stats=global_stats,
+                         page='flashcards')
+
+
+@app.route('/api/folders/create', methods=['POST'])
+@login_required
+def api_create_folder():
+    """API pour créer un nouveau dossier"""
+    user_id = session.get('user_id')
+    data = request.get_json()
+    folder_name = data.get('name')
+    parent_id = data.get('parent_id')
+
+    if not folder_name:
+        return jsonify({'success': False, 'error': 'Nom du dossier requis'}), 400
+
+    folder_id = create_folder(user_id, folder_name, parent_id)
+    return jsonify({'success': True, 'folder_id': folder_id})
+
+
+@app.route('/api/folders/<int:folder_id>/rename', methods=['POST'])
+@login_required
+def api_rename_folder(folder_id):
+    """API pour renommer un dossier"""
+    data = request.get_json()
+    new_name = data.get('name')
+
+    if not new_name:
+        return jsonify({'success': False, 'error': 'Nouveau nom requis'}), 400
+
+    rename_folder(folder_id, new_name)
+    return jsonify({'success': True})
+
+
+@app.route('/api/folders/<int:folder_id>/delete', methods=['POST'])
+@login_required
+def api_delete_folder(folder_id):
+    """API pour supprimer un dossier"""
+    delete_folder(folder_id)
+    return jsonify({'success': True})
+
+
+@app.route('/api/decks/<int:deck_id>/move', methods=['POST'])
+@login_required
+def api_move_deck(deck_id):
+    """API pour déplacer un deck dans un dossier"""
+    data = request.get_json()
+    folder_id = data.get('folder_id')
+
+    move_deck_to_folder(deck_id, folder_id)
+    return jsonify({'success': True})
+
 
 @app.route('/flashcards/play')
 @login_required

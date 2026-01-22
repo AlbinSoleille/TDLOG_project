@@ -2,7 +2,7 @@
 
 {% block content %}
 <div class="container" style="max-width: 1000px;">
-    <h1 class="mb-4 mt-2">📊 Statistiques de Révision</h1>
+    <h1 class="mb-4 mt-2"> Statistiques de Révision</h1>
 
     <!-- Statistiques globales -->
     <div class="row mb-4">
@@ -54,10 +54,10 @@
                 <div class="col-md-6 text-end">
                     {% if stats.global.cards_due > 0 %}
                         <a href="{{ url_for('flashcards_menu') }}" class="btn btn-success">
-                            🎴 Continuer à réviser
+                             Continuer à réviser
                         </a>
                     {% else %}
-                        <span class="text-muted">✅ Aucune carte à réviser !</span>
+                        <span class="text-muted"> Aucune carte à réviser !</span>
                     {% endif %}
                 </div>
             </div>
@@ -96,7 +96,7 @@
     <!-- Statistiques par deck -->
     <div class="card mb-4">
         <div class="card-header bg-info text-white">
-            <h5 class="mb-0">📚 Statistiques par Deck</h5>
+            <h5 class="mb-0"> Statistiques par Deck</h5>
         </div>
         <div class="card-body">
             {% if stats.decks|length == 0 %}
@@ -137,7 +137,7 @@
     <!-- Activité des 30 derniers jours -->
     <div class="card mb-4">
         <div class="card-header bg-secondary text-white">
-            <h5 class="mb-0">📈 Activité des 30 derniers jours</h5>
+            <h5 class="mb-0"> Activité des 30 derniers jours</h5>
         </div>
         <div class="card-body">
             {% if stats.activity|length == 0 %}
@@ -160,7 +160,7 @@
     <!-- Retour -->
     <div class="text-center mt-4 mb-4">
         <a href="{{ url_for('parametres') }}" class="btn btn-secondary">
-            ← Retour aux paramètres
+             Retour aux paramètres
         </a>
     </div>
 </div>

@@ -2,7 +2,7 @@
 
 {% block content %}
 <div class="container" style="max-width: 900px;">
-    <h1 class="mb-4 mt-2">🤖 Prompt Personnalisé</h1>
+    <h1 class="mb-4 mt-2"> Prompt Personnalisé</h1>
 
     <!-- Alert pour les messages -->
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -18,7 +18,7 @@
 
     <div class="card mb-4">
         <div class="card-header bg-primary text-white">
-            <h5 class="mb-0">✏️ Modifier votre prompt</h5>
+            <h5 class="mb-0"> Modifier votre prompt</h5>
         </div>
         <div class="card-body">
             <p class="text-muted mb-3">
@@ -43,13 +43,13 @@
 
                 <div class="d-flex gap-2">
                     <button type="submit" name="action" value="save" class="btn btn-success">
-                        💾 Enregistrer
+                         Enregistrer
                     </button>
                     <button type="submit" name="action" value="reset" class="btn btn-warning" onclick="return confirm('Êtes-vous sûr de vouloir réinitialiser au prompt par défaut ?')">
-                        🔄 Réinitialiser par défaut
+                         Réinitialiser par défaut
                     </button>
                     <a href="{{ url_for('parametres') }}" class="btn btn-secondary">
-                        ← Retour
+                         Retour
                     </a>
                 </div>
             </form>
@@ -59,7 +59,7 @@
     <!-- Prompt par défaut (en lecture seule) -->
     <div class="card mb-4">
         <div class="card-header bg-secondary text-white">
-            <h5 class="mb-0">📋 Prompt par défaut (référence)</h5>
+            <h5 class="mb-0"> Prompt par défaut (référence)</h5>
         </div>
         <div class="card-body">
             <pre class="mb-0" style="white-space: pre-wrap;">{{ default_prompt }}</pre>

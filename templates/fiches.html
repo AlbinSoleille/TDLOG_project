@@ -3,14 +3,14 @@
 {% block content %}
 
     <div class="row justify-content-center">
-        <div class="col-md-8 col-lg-6"> <h1 class="text-center mb-4 mt-2">Fiches résumées 📄</h1>
+        <div class="col-md-8 col-lg-6"> <h1 class="text-center mb-4 mt-2">Fiches résumées </h1>
 
             <!-- Alert pour les messages -->
             <div id="alertContainer"></div>
 
             <div class="card mb-4 border-primary shadow-sm">
                 <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                    <span>🏛️ Documents Officiels</span>
+                    <span> Documents Officiels</span>
                     <span class="badge bg-white text-primary">{{ originaux|length }}</span>
                 </div>
                 <div class="list-group list-group-flush">
@@ -23,7 +23,7 @@
                             <a href="{{ url_for('static', filename='pdfs/fiches/originaux/' + fichier) }}"
                                class="list-group-item list-group-item-action py-3" target="_blank">
                                 <div class="d-flex align-items-center">
-                                    <span class="fs-4 me-3">📄</span>
+                                    <span class="fs-4 me-3"></span>
                                     <span class="fw-bold">{{ fichier }}</span>
                                 </div>
                             </a>
@@ -44,7 +44,7 @@
 
             <div class="card border-success shadow-sm mb-5">
                 <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-                    <span>👤 Vos Téléchargements</span>
+                    <span> Vos Téléchargements</span>
                     <span class="badge bg-white text-success">{{ uploads|length }}</span>
                 </div>
                 <div class="list-group list-group-flush">
@@ -67,7 +67,7 @@
                                         </a>
                                         <button class="btn btn-sm btn-primary"
                                                 onclick="ouvrirModalFlashcards('{{ fichier }}', 'fiches', 'uploads')">
-                                            ⚡ Générer flashcards
+                                             Générer flashcards
                                         </button>
                                     </div>
                                 </div>
@@ -85,7 +85,7 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">⚡ Générer des flashcards</h5>
+                    <h5 class="modal-title"> Générer des flashcards</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -126,7 +126,7 @@
 
                         <div class="alert alert-info mb-0">
                             <small>
-                                <strong>ℹ️ Info:</strong> La génération utilise l'API configurée dans <code>config.py</code>.
+                                <strong> Info:</strong> La génération utilise l'API configurée dans <code>config.py</code>.
                                 Si aucune clé API n'est configurée, des flashcards d'exemple seront générées pour tester le système.
                             </small>
                         </div>
@@ -229,17 +229,17 @@
 
                 if (data.success) {
                     afficherMessage(
-                        `✅ ${data.message}! Vous pouvez maintenant accéder au deck "${data.deck_name}" depuis le menu Flashcards.`,
+                        ` ${data.message}! Vous pouvez maintenant accéder au deck "${data.deck_name}" depuis le menu Flashcards.`,
                         'success'
                     );
                     modalFlashcards.hide();
                     // Réinitialiser le formulaire
                     document.getElementById('formGenererFlashcards').reset();
                 } else {
-                    afficherMessage(`❌ Erreur: ${data.error}`, 'danger');
+                    afficherMessage(` Erreur: ${data.error}`, 'danger');
                 }
             } catch (error) {
-                afficherMessage(`❌ Erreur réseau: ${error.message}`, 'danger');
+                afficherMessage(` Erreur réseau: ${error.message}`, 'danger');
             } finally {
                 // Réactiver le bouton
                 btnGenerer.disabled = false;

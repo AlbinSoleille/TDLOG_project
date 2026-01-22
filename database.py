@@ -101,6 +101,19 @@ def init_database():
             )
         ''')
 
+        # Table des dossiers pour organiser les decks
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS folders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                parent_id INTEGER,
+                user_id INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (parent_id) REFERENCES folders(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        ''')
+
         # Index pour améliorer les performances
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_flashcards_deck
@@ -115,6 +128,16 @@ def init_database():
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_progress_flashcard
             ON user_progress(flashcard_id)
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_folders_user
+            ON folders(user_id)
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_folders_parent
+            ON folders(parent_id)
         ''')
 
         print("✅ Base de données initialisée avec succès")
@@ -332,6 +355,52 @@ def save_user_prompt(user_id, custom_prompt):
 
 # --- FONCTIONS POUR LES STATISTIQUES ---
 
+def get_user_flashcard_counts(user_id):
+    """Récupère les compteurs de cartes nouvelles/à réapprendre/à réviser pour un utilisateur"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Cartes nouvelles (jamais étudiées)
+        cursor.execute('''
+            SELECT COUNT(DISTINCT f.id) as new_cards
+            FROM flashcards f
+            INNER JOIN decks d ON f.deck_id = d.id
+            LEFT JOIN user_progress up ON f.id = up.flashcard_id AND up.user_id = ?
+            WHERE d.user_id = ? AND up.id IS NULL
+        ''', (user_id, user_id))
+        new_count = cursor.fetchone()['new_cards']
+
+        # Cartes à réapprendre (en apprentissage et dues)
+        cursor.execute('''
+            SELECT COUNT(DISTINCT f.id) as relearn_cards
+            FROM flashcards f
+            INNER JOIN decks d ON f.deck_id = d.id
+            INNER JOIN user_progress up ON f.id = up.flashcard_id AND up.user_id = ?
+            WHERE d.user_id = ?
+            AND up.is_learning = 1
+            AND up.due_date <= datetime('now')
+        ''', (user_id, user_id))
+        relearn_count = cursor.fetchone()['relearn_cards']
+
+        # Cartes à réviser (matures et dues)
+        cursor.execute('''
+            SELECT COUNT(DISTINCT f.id) as review_cards
+            FROM flashcards f
+            INNER JOIN decks d ON f.deck_id = d.id
+            INNER JOIN user_progress up ON f.id = up.flashcard_id AND up.user_id = ?
+            WHERE d.user_id = ?
+            AND up.is_learning = 0
+            AND up.due_date <= datetime('now')
+        ''', (user_id, user_id))
+        review_count = cursor.fetchone()['review_cards']
+
+        return {
+            'new': new_count,
+            'relearn': relearn_count,
+            'review': review_count
+        }
+
+
 def get_user_statistics(user_id):
     """Récupère les statistiques complètes d'un utilisateur (style Anki)"""
     with get_db_connection() as conn:
@@ -398,6 +467,173 @@ def get_user_statistics(user_id):
             'today': today_stats,
             'decks': deck_stats,
             'activity': activity_stats
+        }
+
+
+# --- FONCTIONS POUR LES DOSSIERS ---
+
+def create_folder(user_id, name, parent_id=None):
+    """Crée un nouveau dossier pour organiser les decks"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            'INSERT INTO folders (user_id, name, parent_id) VALUES (?, ?, ?)',
+            (user_id, name, parent_id)
+        )
+        return cursor.lastrowid
+
+
+def get_user_folders(user_id, parent_id=None):
+    """Récupère les dossiers d'un utilisateur (optionnellement filtrés par parent)"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if parent_id is None:
+            # Récupérer les dossiers racine (sans parent)
+            cursor.execute(
+                'SELECT * FROM folders WHERE user_id = ? AND parent_id IS NULL ORDER BY name',
+                (user_id,)
+            )
+        else:
+            # Récupérer les sous-dossiers d'un dossier parent
+            cursor.execute(
+                'SELECT * FROM folders WHERE user_id = ? AND parent_id = ? ORDER BY name',
+                (user_id, parent_id)
+            )
+        return cursor.fetchall()
+
+
+def get_folder_by_id(folder_id):
+    """Récupère un dossier par son ID"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM folders WHERE id = ?', (folder_id,))
+        return cursor.fetchone()
+
+
+def rename_folder(folder_id, new_name):
+    """Renomme un dossier"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('UPDATE folders SET name = ? WHERE id = ?', (new_name, folder_id))
+
+
+def delete_folder(folder_id):
+    """Supprime un dossier et tous ses sous-dossiers (CASCADE)"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM folders WHERE id = ?', (folder_id,))
+
+
+def move_deck_to_folder(deck_id, folder_id):
+    """Déplace un deck dans un dossier"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('UPDATE decks SET folder_id = ? WHERE id = ?', (folder_id, deck_id))
+
+
+def get_decks_in_folder(user_id, folder_id=None):
+    """Récupère les decks dans un dossier (ou à la racine si folder_id=None)"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if folder_id is None:
+            cursor.execute(
+                'SELECT * FROM decks WHERE user_id = ? AND (folder_id IS NULL OR folder_id NOT IN (SELECT id FROM folders)) ORDER BY created_at DESC',
+                (user_id,)
+            )
+        else:
+            cursor.execute(
+                'SELECT * FROM decks WHERE user_id = ? AND folder_id = ? ORDER BY created_at DESC',
+                (user_id, folder_id)
+            )
+        return cursor.fetchall()
+
+
+def get_folder_statistics(user_id, folder_id):
+    """Récupère les statistiques d'un dossier (nouvelles/réapprendre/réviser)"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Cartes nouvelles dans ce dossier
+        cursor.execute('''
+            SELECT COUNT(DISTINCT f.id) as new_cards
+            FROM flashcards f
+            INNER JOIN decks d ON f.deck_id = d.id
+            LEFT JOIN user_progress up ON f.id = up.flashcard_id AND up.user_id = ?
+            WHERE d.user_id = ? AND d.folder_id = ? AND up.id IS NULL
+        ''', (user_id, user_id, folder_id))
+        new_count = cursor.fetchone()['new_cards']
+
+        # Cartes à réapprendre dans ce dossier
+        cursor.execute('''
+            SELECT COUNT(DISTINCT f.id) as relearn_cards
+            FROM flashcards f
+            INNER JOIN decks d ON f.deck_id = d.id
+            INNER JOIN user_progress up ON f.id = up.flashcard_id AND up.user_id = ?
+            WHERE d.user_id = ? AND d.folder_id = ?
+            AND up.is_learning = 1
+            AND up.due_date <= datetime('now')
+        ''', (user_id, user_id, folder_id))
+        relearn_count = cursor.fetchone()['relearn_cards']
+
+        # Cartes à réviser dans ce dossier
+        cursor.execute('''
+            SELECT COUNT(DISTINCT f.id) as review_cards
+            FROM flashcards f
+            INNER JOIN decks d ON f.deck_id = d.id
+            INNER JOIN user_progress up ON f.id = up.flashcard_id AND up.user_id = ?
+            WHERE d.user_id = ? AND d.folder_id = ?
+            AND up.is_learning = 0
+            AND up.due_date <= datetime('now')
+        ''', (user_id, user_id, folder_id))
+        review_count = cursor.fetchone()['review_cards']
+
+        return {
+            'new': new_count,
+            'relearn': relearn_count,
+            'review': review_count
+        }
+
+
+def get_deck_statistics(user_id, deck_id):
+    """Récupère les statistiques d'un deck (nouvelles/réapprendre/réviser)"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Cartes nouvelles dans ce deck
+        cursor.execute('''
+            SELECT COUNT(DISTINCT f.id) as new_cards
+            FROM flashcards f
+            LEFT JOIN user_progress up ON f.id = up.flashcard_id AND up.user_id = ?
+            WHERE f.deck_id = ? AND up.id IS NULL
+        ''', (user_id, deck_id))
+        new_count = cursor.fetchone()['new_cards']
+
+        # Cartes à réapprendre dans ce deck
+        cursor.execute('''
+            SELECT COUNT(DISTINCT f.id) as relearn_cards
+            FROM flashcards f
+            INNER JOIN user_progress up ON f.id = up.flashcard_id AND up.user_id = ?
+            WHERE f.deck_id = ?
+            AND up.is_learning = 1
+            AND up.due_date <= datetime('now')
+        ''', (user_id, deck_id))
+        relearn_count = cursor.fetchone()['relearn_cards']
+
+        # Cartes à réviser dans ce deck
+        cursor.execute('''
+            SELECT COUNT(DISTINCT f.id) as review_cards
+            FROM flashcards f
+            INNER JOIN user_progress up ON f.id = up.flashcard_id AND up.user_id = ?
+            WHERE f.deck_id = ?
+            AND up.is_learning = 0
+            AND up.due_date <= datetime('now')
+        ''', (user_id, deck_id))
+        review_count = cursor.fetchone()['review_cards']
+
+        return {
+            'new': new_count,
+            'relearn': relearn_count,
+            'review': review_count
         }
 
 

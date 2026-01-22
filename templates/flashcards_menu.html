@@ -1,25 +1,232 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container text-center" style="max-width: 600px;">
-    <h1 class="mb-4 mt-2">Mes Decks de Révision 🗂️</h1>
-    
-    <p class="text-muted mb-4">Choisis un sujet pour commencer à réviser :</p>
+<div class="container" style="max-width: 800px;" x-data="flashcardsManager()">
+    <h1 class="mb-4 mt-2 text-center">Mes Decks de Révision</h1>
 
-    <div class="list-group shadow-sm">
-        {% if decks|length == 0 %}
-            <div class="alert alert-warning">
-                Aucun deck de flashcards disponible. Générez-en depuis vos cours PDF !
+    <!-- Bouton pour créer un nouveau dossier -->
+    <div class="mb-3 text-end">
+        <button class="btn btn-sm btn-outline-primary" @click="createFolder(null)">
+            Nouveau dossier
+        </button>
+    </div>
+
+    <!-- Arborescence des dossiers et decks -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            {% if folder_tree|length == 0 and root_decks|length == 0 %}
+                <div class="alert alert-warning">
+                    Aucun deck de flashcards disponible. Générez-en depuis vos cours PDF !
+                </div>
+            {% else %}
+                <!-- Decks à la racine -->
+                {% for deck in root_decks %}
+                    <div class="list-item deck-item d-flex justify-content-between align-items-center p-2 border-bottom">
+                        <div class="d-flex align-items-center flex-grow-1">
+                            <a href="{{ url_for('flashcards_play', deck=deck.name) }}" class="text-decoration-none text-dark fw-bold flex-grow-1">
+                                {{ deck.name }}
+                            </a>
+                        </div>
+                        <div class="d-flex gap-2 align-items-center">
+                            <span class="badge bg-primary" title="Nouvelles">{{ deck.stats.new }}</span>
+                            <span class="badge bg-warning" title="À réapprendre">{{ deck.stats.relearn }}</span>
+                            <span class="badge bg-success" title="À réviser">{{ deck.stats.review }}</span>
+                            <button class="btn btn-sm btn-outline-secondary" @click="moveDeck({{ deck.id }}, '{{ deck.name }}')">
+                                Déplacer
+                            </button>
+                        </div>
+                    </div>
+                {% endfor %}
+
+                <!-- Arborescence des dossiers -->
+                {% for folder in folder_tree %}
+                    {{ render_folder(folder) }}
+                {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Statistiques globales -->
+    {% if folder_tree|length > 0 or root_decks|length > 0 %}
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <h6 class="card-subtitle mb-3 text-muted">Statistiques globales</h6>
+            <div class="row text-center">
+                <div class="col-4">
+                    <div class="p-2">
+                        <h3 class="text-primary mb-0">{{ stats.new }}</h3>
+                        <small class="text-muted">Nouvelles</small>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="p-2">
+                        <h3 class="text-warning mb-0">{{ stats.relearn }}</h3>
+                        <small class="text-muted">À réapprendre</small>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="p-2">
+                        <h3 class="text-success mb-0">{{ stats.review }}</h3>
+                        <small class="text-muted">À réviser</small>
+                    </div>
+                </div>
             </div>
-        {% else %}
-            {% for deck in decks %}
-                <a href="{{ url_for('flashcards_play', deck=deck.name) }}"
-                   class="list-group-item list-group-item-action d-flex justify-content-between align-items-center py-3">
-                    <span class="fs-5 fw-bold text-dark">🎴 {{ deck.name }}</span>
-                    <span class="badge bg-primary rounded-pill">Jouer ➡️</span>
-                </a>
-            {% endfor %}
-        {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.folder-item {
+    margin-left: 0;
+    cursor: pointer;
+}
+.folder-children {
+    margin-left: 20px;
+}
+.folder-header {
+    padding: 8px;
+    border-bottom: 1px solid #dee2e6;
+}
+.folder-header:hover {
+    background-color: #f8f9fa;
+}
+.deck-item:hover {
+    background-color: #f8f9fa;
+}
+</style>
+
+<script>
+function flashcardsManager() {
+    return {
+        createFolder(parentId) {
+            const folderName = prompt('Nom du nouveau dossier:');
+            if (!folderName) return;
+
+            fetch('/api/folders/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: folderName, parent_id: parentId })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Erreur: ' + data.error);
+                }
+            });
+        },
+
+        renameFolder(folderId) {
+            const newName = prompt('Nouveau nom du dossier:');
+            if (!newName) return;
+
+            fetch(`/api/folders/${folderId}/rename`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Erreur: ' + data.error);
+                }
+            });
+        },
+
+        deleteFolder(folderId) {
+            if (!confirm('Supprimer ce dossier et tout son contenu ?')) return;
+
+            fetch(`/api/folders/${folderId}/delete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                }
+            });
+        },
+
+        moveDeck(deckId, deckName) {
+            const folderId = prompt(`ID du dossier de destination pour "${deckName}" (laissez vide pour racine):`);
+            if (folderId === null) return;
+
+            const targetFolderId = folderId === '' ? null : parseInt(folderId);
+
+            fetch(`/api/decks/${deckId}/move`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ folder_id: targetFolderId })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                }
+            });
+        },
+
+        toggleFolder(event) {
+            const target = event.currentTarget;
+            const children = target.nextElementSibling;
+            if (children && children.classList.contains('folder-children')) {
+                children.style.display = children.style.display === 'none' ? 'block' : 'none';
+                const arrow = target.querySelector('.folder-arrow');
+                if (arrow) {
+                    arrow.textContent = children.style.display === 'none' ? '▶' : '▼';
+                }
+            }
+        }
+    };
+}
+</script>
+{% endblock %}
+
+{% macro render_folder(folder) %}
+<div class="folder-item">
+    <div class="folder-header d-flex justify-content-between align-items-center" @click="toggleFolder">
+        <div class="d-flex align-items-center flex-grow-1">
+            <span class="folder-arrow me-2">▼</span>
+            <strong>{{ folder.name }}</strong>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+            <span class="badge bg-primary" title="Nouvelles">{{ folder.stats.new }}</span>
+            <span class="badge bg-warning" title="À réapprendre">{{ folder.stats.relearn }}</span>
+            <span class="badge bg-success" title="À réviser">{{ folder.stats.review }}</span>
+            <button class="btn btn-sm btn-outline-primary" @click.stop="createFolder({{ folder.id }})">+</button>
+            <button class="btn btn-sm btn-outline-secondary" @click.stop="renameFolder({{ folder.id }})">✎</button>
+            <button class="btn btn-sm btn-outline-danger" @click.stop="deleteFolder({{ folder.id }})">×</button>
+        </div>
+    </div>
+    <div class="folder-children">
+        <!-- Decks dans ce dossier -->
+        {% for deck in folder.decks %}
+            <div class="list-item deck-item d-flex justify-content-between align-items-center p-2 border-bottom">
+                <div class="d-flex align-items-center flex-grow-1">
+                    <a href="{{ url_for('flashcards_play', deck=deck.name) }}" class="text-decoration-none text-dark fw-bold flex-grow-1">
+                        {{ deck.name }}
+                    </a>
+                </div>
+                <div class="d-flex gap-2 align-items-center">
+                    <span class="badge bg-primary" title="Nouvelles">{{ deck.stats.new }}</span>
+                    <span class="badge bg-warning" title="À réapprendre">{{ deck.stats.relearn }}</span>
+                    <span class="badge bg-success" title="À réviser">{{ deck.stats.review }}</span>
+                    <button class="btn btn-sm btn-outline-secondary" @click="moveDeck({{ deck.id }}, '{{ deck.name }}')">
+                        Déplacer
+                    </button>
+                </div>
+            </div>
+        {% endfor %}
+
+        <!-- Sous-dossiers -->
+        {% for child in folder.children %}
+            {{ render_folder(child) }}
+        {% endfor %}
     </div>
 </div>
-{% endblock %}
+{% endmacro %}
