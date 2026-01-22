@@ -2,6 +2,25 @@
 
 {% block content %}
 
+    <style>
+        /* Assurer une hauteur cohérente pour tous les items de la liste */
+        .pdf-item {
+            min-height: 60px;
+        }
+
+        .pdf-filename {
+            max-width: 200px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .pdf-actions {
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+    </style>
+
     <div class="row justify-content-center">
         <div class="col-md-8 col-lg-6"> <h1 class="text-center mb-4 mt-2">Mes Cours PDF </h1>
 
@@ -20,10 +39,9 @@
                         </div>
                     {% else %}
                         {% for fichier in originaux %}
-                            <a href="{{ url_for('static', filename='pdfs/cours/originaux/' + fichier) }}" 
-                               class="list-group-item list-group-item-action py-3" target="_blank">
+                            <a href="{{ url_for('static', filename='pdfs/cours/originaux/' + fichier) }}"
+                               class="list-group-item list-group-item-action pdf-item" target="_blank">
                                 <div class="d-flex align-items-center">
-                                    <span class="fs-4 me-3"></span>
                                     <span class="fw-bold">{{ fichier }}</span>
                                 </div>
                             </a>
@@ -54,12 +72,12 @@
                         </div>
                     {% else %}
                         {% for fichier in uploads %}
-                            <div class="list-group-item py-3">
-                                <div class="d-flex align-items-center justify-content-between w-100">
-                                    <div class="d-flex align-items-center overflow-hidden flex-grow-1">
-                                        <span class="text-truncate">{{ fichier }}</span>
+                            <div class="list-group-item pdf-item">
+                                <div class="d-flex align-items-center justify-content-between w-100 gap-3">
+                                    <div class="pdf-filename" title="{{ fichier }}">
+                                        {{ fichier }}
                                     </div>
-                                    <div class="d-flex gap-2">
+                                    <div class="d-flex gap-2 pdf-actions">
                                         <a href="{{ url_for('static', filename='pdfs/cours/uploads/' + fichier) }}"
                                            class="btn btn-sm btn-outline-success" target="_blank">
                                             Ouvrir
