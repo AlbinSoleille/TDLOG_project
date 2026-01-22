@@ -15,7 +15,8 @@ from database import (
     get_all_decks, get_user_decks, get_deck_by_name, create_deck,
     get_flashcards_by_deck, create_flashcard,
     get_all_user_progress, update_progress, get_user_progress,
-    get_user_prompt, save_user_prompt, get_user_statistics
+    get_user_prompt, save_user_prompt, get_user_statistics,
+    get_user_flashcard_counts
 )
 
 # Importer l'algorithme Anki
@@ -390,7 +391,9 @@ def flashcards_menu():
     decks = get_user_decks(user_id)
     # Convertir les Row en dictionnaires pour le template
     decks_list = [{'id': d['id'], 'name': d['name']} for d in decks]
-    return render_template('flashcards_menu.html', decks=decks_list, page='flashcards')
+    # Récupérer les statistiques de flashcards
+    stats = get_user_flashcard_counts(user_id)
+    return render_template('flashcards_menu.html', decks=decks_list, stats=stats, page='flashcards')
 
 @app.route('/flashcards/play')
 @login_required

@@ -2,11 +2,11 @@
 
 {% block content %}
 <div class="container text-center" style="max-width: 600px;">
-    <h1 class="mb-4 mt-2">Mes Decks de Révision 🗂️</h1>
-    
+    <h1 class="mb-4 mt-2">Mes Decks de Révision</h1>
+
     <p class="text-muted mb-4">Choisis un sujet pour commencer à réviser :</p>
 
-    <div class="list-group shadow-sm">
+    <div class="list-group shadow-sm mb-4">
         {% if decks|length == 0 %}
             <div class="alert alert-warning">
                 Aucun deck de flashcards disponible. Générez-en depuis vos cours PDF !
@@ -21,5 +21,34 @@
             {% endfor %}
         {% endif %}
     </div>
+
+    <!-- Statistiques globales -->
+    {% if decks|length > 0 %}
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <h6 class="card-subtitle mb-3 text-muted">Statistiques globales</h6>
+            <div class="row text-center">
+                <div class="col-4">
+                    <div class="p-2">
+                        <h3 class="text-primary mb-0">{{ stats.new }}</h3>
+                        <small class="text-muted">Nouvelles</small>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="p-2">
+                        <h3 class="text-warning mb-0">{{ stats.relearn }}</h3>
+                        <small class="text-muted">À réapprendre</small>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="p-2">
+                        <h3 class="text-success mb-0">{{ stats.review }}</h3>
+                        <small class="text-muted">À réviser</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

@@ -332,6 +332,52 @@ def save_user_prompt(user_id, custom_prompt):
 
 # --- FONCTIONS POUR LES STATISTIQUES ---
 
+def get_user_flashcard_counts(user_id):
+    """Récupère les compteurs de cartes nouvelles/à réapprendre/à réviser pour un utilisateur"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # Cartes nouvelles (jamais étudiées)
+        cursor.execute('''
+            SELECT COUNT(DISTINCT f.id) as new_cards
+            FROM flashcards f
+            INNER JOIN decks d ON f.deck_id = d.id
+            LEFT JOIN user_progress up ON f.id = up.flashcard_id AND up.user_id = ?
+            WHERE d.user_id = ? AND up.id IS NULL
+        ''', (user_id, user_id))
+        new_count = cursor.fetchone()['new_cards']
+
+        # Cartes à réapprendre (en apprentissage et dues)
+        cursor.execute('''
+            SELECT COUNT(DISTINCT f.id) as relearn_cards
+            FROM flashcards f
+            INNER JOIN decks d ON f.deck_id = d.id
+            INNER JOIN user_progress up ON f.id = up.flashcard_id AND up.user_id = ?
+            WHERE d.user_id = ?
+            AND up.is_learning = 1
+            AND up.due_date <= datetime('now')
+        ''', (user_id, user_id))
+        relearn_count = cursor.fetchone()['relearn_cards']
+
+        # Cartes à réviser (matures et dues)
+        cursor.execute('''
+            SELECT COUNT(DISTINCT f.id) as review_cards
+            FROM flashcards f
+            INNER JOIN decks d ON f.deck_id = d.id
+            INNER JOIN user_progress up ON f.id = up.flashcard_id AND up.user_id = ?
+            WHERE d.user_id = ?
+            AND up.is_learning = 0
+            AND up.due_date <= datetime('now')
+        ''', (user_id, user_id))
+        review_count = cursor.fetchone()['review_cards']
+
+        return {
+            'new': new_count,
+            'relearn': relearn_count,
+            'review': review_count
+        }
+
+
 def get_user_statistics(user_id):
     """Récupère les statistiques complètes d'un utilisateur (style Anki)"""
     with get_db_connection() as conn:
