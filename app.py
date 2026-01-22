@@ -158,7 +158,7 @@ def generer_flashcards_via_api(texte, nb_flashcards=10, prompt_template=None, ex
 
     # Adapter la limite de texte selon le nombre de flashcards demandées
     # Plus on veut de flashcards, plus on a besoin de texte
-    max_chars = min(8000 + (nb_flashcards * 50), 30000)
+    max_chars = min(8000 + (nb_flashcards * 100), 50000)
 
     # Formatter le prompt avec les variables
     prompt = prompt_template.format(
@@ -183,8 +183,8 @@ NE PAS répéter ou paraphraser ces questions existantes!"""
     print(f"📏 Texte limité à {max_chars} caractères pour {nb_flashcards} flashcards")
 
     # Calculer max_tokens en fonction du nombre de flashcards
-    # Environ 50 tokens par flashcard + marge de sécurité
-    max_tokens = max(2000, nb_flashcards * 60 + 500)
+    # Environ 100 tokens par flashcard (pour gérer LaTeX et explications) + marge de sécurité
+    max_tokens = max(2000, nb_flashcards * 100 + 1000)
 
     try:
         if API_PROVIDER == 'claude':

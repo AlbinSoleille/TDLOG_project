@@ -26,7 +26,7 @@
                 {% for deck in root_decks %}
                     <div class="list-item deck-item d-flex justify-content-between align-items-center p-2 border-bottom">
                         <div class="d-flex align-items-center flex-grow-1">
-                            <a href="{{ url_for('flashcards_play', deck=deck.name) }}" class="text-decoration-none text-dark fw-bold flex-grow-1">
+                            <a href="{{ url_for('flashcards_play', deck=deck.name) }}" class="text-decoration-none fw-bold flex-grow-1" style="color: var(--text-primary);">
                                 {{ deck.name }}
                             </a>
                         </div>
@@ -89,13 +89,13 @@
 }
 .folder-header {
     padding: 8px;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--border-color);
 }
 .folder-header:hover {
-    background-color: #f8f9fa;
+    background-color: var(--bg-secondary);
 }
 .deck-item:hover {
-    background-color: #f8f9fa;
+    background-color: var(--bg-secondary);
 }
 </style>
 
@@ -391,7 +391,7 @@ function insertFormatting(field, format) {
         {% for deck in folder.decks %}
             <div class="list-item deck-item d-flex justify-content-between align-items-center p-2 border-bottom">
                 <div class="d-flex align-items-center flex-grow-1">
-                    <a href="{{ url_for('flashcards_play', deck=deck.name) }}" class="text-decoration-none text-dark fw-bold flex-grow-1">
+                    <a href="{{ url_for('flashcards_play', deck=deck.name) }}" class="text-decoration-none fw-bold flex-grow-1" style="color: var(--text-primary);">
                         {{ deck.name }}
                     </a>
                 </div>
