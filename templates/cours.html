@@ -72,6 +72,10 @@
                                                 onclick="ouvrirModalFiche('{{ fichier }}', 'cours', 'uploads')">
                                              Générer fiche
                                         </button>
+                                        <button class="btn btn-sm btn-outline-danger"
+                                                onclick="supprimerPdf('{{ fichier }}')">
+                                             Supprimer
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -371,6 +375,40 @@
                 btnGenererFiche.disabled = false;
                 btnFicheText.classList.remove('d-none');
                 btnFicheSpinner.classList.add('d-none');
+            }
+        }
+
+        async function supprimerPdf(filename) {
+            if (!confirm(`Êtes-vous sûr de vouloir supprimer "${filename}" ?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/supprimer-pdf', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        filename: filename,
+                        categorie: 'cours',
+                        source: 'uploads'
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    afficherMessage(` ${data.message}`, 'success');
+                    // Recharger la page pour actualiser la liste
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    afficherMessage(` Erreur: ${data.error}`, 'danger');
+                }
+            } catch (error) {
+                afficherMessage(` Erreur réseau: ${error.message}`, 'danger');
             }
         }
     </script>

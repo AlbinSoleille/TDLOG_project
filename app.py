@@ -771,6 +771,69 @@ def statistics():
                           page='parametres')
 
 
+@app.route('/api/supprimer-pdf', methods=['POST'])
+@login_required
+def supprimer_pdf():
+    """Endpoint API pour supprimer un PDF uploadé"""
+    try:
+        data = request.get_json()
+        print(f"\n{'='*60}")
+        print(f"🗑️  SUPPRESSION DE PDF - Nouvelle requête")
+        print(f"{'='*60}")
+
+        # Récupération des paramètres
+        filename = data.get('filename')
+        categorie = data.get('categorie', 'cours')
+        source = data.get('source', 'uploads')
+
+        print(f"📄 Fichier: {filename}")
+        print(f"📁 Catégorie: {categorie}, Source: {source}")
+
+        if not filename:
+            print("❌ Nom de fichier manquant")
+            return jsonify({
+                'success': False,
+                'error': 'Nom de fichier requis'
+            }), 400
+
+        # Vérifier que c'est bien un fichier uploadé (sécurité)
+        if source != 'uploads':
+            print("❌ Tentative de suppression d'un fichier non-uploadé")
+            return jsonify({
+                'success': False,
+                'error': 'Seuls les fichiers uploadés peuvent être supprimés'
+            }), 403
+
+        # Construction du chemin du PDF
+        pdf_path = os.path.join(BASE_DIR, 'static/pdfs', categorie, source, filename)
+        print(f"🔍 Chemin PDF: {pdf_path}")
+
+        if not os.path.exists(pdf_path):
+            print(f"❌ Fichier PDF non trouvé: {pdf_path}")
+            return jsonify({
+                'success': False,
+                'error': f'Fichier PDF non trouvé: {filename}'
+            }), 404
+
+        # Supprimer le fichier
+        os.remove(pdf_path)
+        print(f"✅ Fichier supprimé: {pdf_path}")
+
+        return jsonify({
+            'success': True,
+            'message': f'PDF "{filename}" supprimé avec succès'
+        })
+
+    except Exception as e:
+        print(f"❌ Erreur lors de la suppression du PDF: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/generer-fiche', methods=['POST'])
 @login_required
 def generer_fiche_from_pdf():
