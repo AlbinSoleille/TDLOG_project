@@ -8,10 +8,10 @@
             <!-- Alert pour les messages -->
             <div id="alertContainer"></div>
 
-            <div class="card mb-4 border-primary shadow-sm">
-                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <div class="card mb-4 shadow-sm" style="border-color: var(--compartment-border);">
+                <div class="card-header d-flex justify-content-between align-items-center" style="background-color: var(--compartment-bg); color: var(--text-primary); border-color: var(--compartment-border);">
                     <span> Documents Officiels</span>
-                    <span class="badge bg-white text-primary">{{ originaux|length }}</span>
+                    <span class="badge" style="background-color: var(--card-bg); color: var(--text-primary);">{{ originaux|length }}</span>
                 </div>
                 <div class="list-group list-group-flush">
                     {% if originaux|length == 0 %}
@@ -42,10 +42,10 @@
                 </form>
             </div>
 
-            <div class="card border-success shadow-sm mb-5">
-                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+            <div class="card shadow-sm mb-5" style="border-color: var(--compartment-border);">
+                <div class="card-header d-flex justify-content-between align-items-center" style="background-color: var(--compartment-bg); color: var(--text-primary); border-color: var(--compartment-border);">
                     <span> Vos Téléchargements</span>
-                    <span class="badge bg-white text-success">{{ uploads|length }}</span>
+                    <span class="badge" style="background-color: var(--card-bg); color: var(--text-primary);">{{ uploads|length }}</span>
                 </div>
                 <div class="list-group list-group-flush">
                     {% if uploads|length == 0 %}
@@ -57,7 +57,6 @@
                             <div class="list-group-item py-3">
                                 <div class="d-flex align-items-center justify-content-between w-100">
                                     <div class="d-flex align-items-center overflow-hidden flex-grow-1">
-                                        <span class="fs-4 me-3">📂</span>
                                         <span class="text-truncate">{{ fichier }}</span>
                                     </div>
                                     <div class="d-flex gap-2">
@@ -69,6 +68,10 @@
                                                 onclick="ouvrirModalFlashcards('{{ fichier }}', 'cours', 'uploads')">
                                              Générer flashcards
                                         </button>
+                                        <button class="btn btn-sm btn-info"
+                                                onclick="ouvrirModalFiche('{{ fichier }}', 'cours', 'uploads')">
+                                             Générer fiche
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -77,6 +80,50 @@
                 </div>
             </div>
 
+        </div>
+    </div>
+
+    <!-- Modal pour générer une fiche résumé -->
+    <div class="modal fade" id="modalFiche" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"> Générer une fiche résumé</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formGenererFiche">
+                        <input type="hidden" id="fichePdfFilename" name="pdfFilename">
+                        <input type="hidden" id="ficheCategorie" name="categorie">
+                        <input type="hidden" id="ficheSource" name="source">
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Fichier PDF</label>
+                            <input type="text" class="form-control" id="ficheDisplayPdfName" disabled>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="ficheNom" class="form-label fw-bold">Nom de la fiche</label>
+                            <input type="text" class="form-control" id="ficheNom" name="ficheNom"
+                                   placeholder="Ex: resume_statistiques" required>
+                            <small class="text-muted">Ce nom sera utilisé pour identifier votre fiche</small>
+                        </div>
+
+                        <div class="alert alert-info mb-0">
+                            <small>
+                                <strong> Info:</strong> La fiche résumé contiendra uniquement les définitions, propriétés et exemples importants du document.
+                            </small>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="button" class="btn btn-info" onclick="genererFiche()" id="btnGenererFiche">
+                        <span id="btnFicheText">Générer</span>
+                        <span id="btnFicheSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -145,10 +192,26 @@
 
     <script>
         let modalFlashcards;
+        let modalFiche;
 
         document.addEventListener('DOMContentLoaded', function() {
             modalFlashcards = new bootstrap.Modal(document.getElementById('modalFlashcards'));
+            modalFiche = new bootstrap.Modal(document.getElementById('modalFiche'));
         });
+
+        function ouvrirModalFiche(filename, categorie, source) {
+            document.getElementById('fichePdfFilename').value = filename;
+            document.getElementById('ficheCategorie').value = categorie;
+            document.getElementById('ficheSource').value = source;
+            document.getElementById('ficheDisplayPdfName').value = filename;
+
+            // Suggérer un nom de fiche basé sur le nom du fichier
+            const nomSuggere = 'resume_' + filename.replace('.pdf', '').toLowerCase()
+                .replace(/[^a-z0-9]/g, '_');
+            document.getElementById('ficheNom').value = nomSuggere;
+
+            modalFiche.show();
+        }
 
         function ouvrirModalFlashcards(filename, categorie, source) {
             document.getElementById('pdfFilename').value = filename;
@@ -245,6 +308,69 @@
                 btnGenerer.disabled = false;
                 btnText.classList.remove('d-none');
                 btnSpinner.classList.add('d-none');
+            }
+        }
+
+        async function genererFiche() {
+            const btnGenererFiche = document.getElementById('btnGenererFiche');
+            const btnFicheText = document.getElementById('btnFicheText');
+            const btnFicheSpinner = document.getElementById('btnFicheSpinner');
+
+            // Récupération des valeurs
+            const pdfFilename = document.getElementById('fichePdfFilename').value;
+            const categorie = document.getElementById('ficheCategorie').value;
+            const source = document.getElementById('ficheSource').value;
+            const ficheNom = document.getElementById('ficheNom').value.trim();
+
+            if (!ficheNom) {
+                afficherMessage('Veuillez remplir le nom de la fiche', 'warning');
+                return;
+            }
+
+            // Désactiver le bouton et afficher le spinner
+            btnGenererFiche.disabled = true;
+            btnFicheText.classList.add('d-none');
+            btnFicheSpinner.classList.remove('d-none');
+
+            try {
+                const requestData = {
+                    pdf_filename: pdfFilename,
+                    categorie: categorie,
+                    source: source,
+                    fiche_nom: ficheNom
+                };
+
+                const response = await fetch('/api/generer-fiche', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    afficherMessage(
+                        ` ${data.message}! Vous pouvez télécharger la fiche résumé.`,
+                        'success'
+                    );
+                    modalFiche.hide();
+                    // Réinitialiser le formulaire
+                    document.getElementById('formGenererFiche').reset();
+
+                    // Télécharger la fiche
+                    window.open(data.download_url, '_blank');
+                } else {
+                    afficherMessage(` Erreur: ${data.error}`, 'danger');
+                }
+            } catch (error) {
+                afficherMessage(` Erreur réseau: ${error.message}`, 'danger');
+            } finally {
+                // Réactiver le bouton
+                btnGenererFiche.disabled = false;
+                btnFicheText.classList.remove('d-none');
+                btnFicheSpinner.classList.add('d-none');
             }
         }
     </script>

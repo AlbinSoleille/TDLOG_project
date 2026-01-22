@@ -53,16 +53,16 @@
     .card-face::-webkit-scrollbar { width: 8px; }
     .card-face::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.2); border-radius: 4px; }
 
-    /* COULEURS */
+    /* COULEURS - Adaptatives au thème */
     .card-front {
-        background: white;
-        color: #333;
-        border: 2px solid #0d6efd;
+        background: var(--flashcard-front);
+        color: var(--text-primary);
+        border: 2px solid var(--border-color);
     }
-    
+
     .card-back {
-        background: #0d6efd;
-        color: white;
+        background: var(--flashcard-back);
+        color: var(--text-primary);
         transform: rotateY(180deg);
     }
 
@@ -77,7 +77,7 @@
 
 <div class="container text-center">
     <div class="d-flex justify-content-center align-items-center mb-4 mt-2">
-        <a href="{{ url_for('flashcards_menu') }}" class="btn btn-outline-secondary btn-sm me-3">⬅️ Choix</a>
+        <a href="{{ url_for('flashcards_menu') }}" class="btn btn-outline-secondary btn-sm me-3">Choix</a>
         <h3 class="m-0 text-primary">{{ current_deck if current_deck else 'Jeu de Flashcards' }} 🧠</h3>
     </div>
 

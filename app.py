@@ -54,6 +54,35 @@ Exemple de format attendu:
 Qu'est-ce qu'une variable aléatoire ?;;;Une fonction qui associe à chaque issue d'une expérience aléatoire un nombre réel
 Quelle est la formule de la variance ?;;;$Var(X) = E[(X - E[H])^2] = E[X^2] - (E[X])^2$"""
 
+FICHE_RESUME_PROMPT_TEMPLATE = """Tu es un assistant pédagogique spécialisé en mathématiques. À partir du texte suivant, crée une fiche résumé structurée et claire.
+
+Texte du cours:
+{texte}
+
+Règles strictes:
+- Ne fiche que les DÉFINITIONS, PROPRIÉTÉS et EXEMPLES IMPORTANTS
+- Structure en sections claires avec des titres markdown
+- Utilise la notation LaTeX entre $ pour les formules mathématiques (ex: $x^2$)
+- Sois concis mais complet
+- Privilégie la clarté et l'organisation
+- Utilise des listes à puces quand c'est pertinent
+- Mets en évidence les théorèmes et propriétés clés
+
+Format de la fiche:
+# Titre du cours
+
+## Définitions
+...
+
+## Propriétés principales
+...
+
+## Exemples importants
+...
+
+## Théorèmes clés
+..."""
+
 # --- SECURITE ---
 def login_required(f):
     @wraps(f)
@@ -740,6 +769,174 @@ def statistics():
     return render_template('statistiques.html',
                           stats=stats,
                           page='parametres')
+
+
+@app.route('/api/generer-fiche', methods=['POST'])
+@login_required
+def generer_fiche_from_pdf():
+    """Endpoint API pour générer une fiche résumé à partir d'un PDF"""
+    try:
+        data = request.get_json()
+        print(f"\n{'='*60}")
+        print(f"📝 GÉNÉRATION DE FICHE RÉSUMÉ - Nouvelle requête")
+        print(f"{'='*60}")
+
+        # Récupération des paramètres
+        pdf_filename = data.get('pdf_filename')
+        categorie = data.get('categorie', 'cours')
+        source = data.get('source', 'uploads')
+        fiche_nom = data.get('fiche_nom')
+
+        print(f"📄 PDF: {pdf_filename}")
+        print(f"📁 Catégorie: {categorie}, Source: {source}")
+        print(f"📝 Nom de la fiche: {fiche_nom}")
+
+        if not pdf_filename or not fiche_nom:
+            print("❌ Paramètres manquants")
+            return jsonify({
+                'success': False,
+                'error': 'Paramètres manquants (pdf_filename, fiche_nom requis)'
+            }), 400
+
+        # Construction du chemin du PDF
+        pdf_path = os.path.join(BASE_DIR, 'static/pdfs', categorie, source, pdf_filename)
+        print(f"🔍 Chemin PDF: {pdf_path}")
+
+        if not os.path.exists(pdf_path):
+            print(f"❌ Fichier PDF non trouvé: {pdf_path}")
+            return jsonify({
+                'success': False,
+                'error': f'Fichier PDF non trouvé: {pdf_filename}'
+            }), 404
+
+        print("✅ PDF trouvé, extraction du texte...")
+        # Extraction du texte
+        texte = extraire_texte_pdf(pdf_path)
+        if not texte:
+            print("❌ Impossible d'extraire le texte du PDF")
+            return jsonify({
+                'success': False,
+                'error': 'Impossible d\'extraire le texte du PDF'
+            }), 500
+
+        print(f"✅ Texte extrait: {len(texte)} caractères")
+
+        # Génération de la fiche via l'API
+        print("🤖 Génération de la fiche résumé via l'API...")
+        fiche_content = generer_fiche_via_api(texte)
+
+        if not fiche_content:
+            print("❌ Échec de la génération de la fiche")
+            return jsonify({
+                'success': False,
+                'error': 'Échec de la génération de la fiche résumé'
+            }), 500
+
+        # Créer le dossier pour les fiches si nécessaire
+        fiches_dir = os.path.join(BASE_DIR, 'static/fiches')
+        os.makedirs(fiches_dir, exist_ok=True)
+
+        # Sauvegarder la fiche
+        fiche_filename = f"{fiche_nom}.md"
+        fiche_path = os.path.join(fiches_dir, fiche_filename)
+
+        with open(fiche_path, 'w', encoding='utf-8') as f:
+            f.write(fiche_content)
+
+        print(f"✅ Fiche sauvegardée: {fiche_path}")
+
+        return jsonify({
+            'success': True,
+            'message': 'Fiche résumé générée avec succès',
+            'fiche_name': fiche_nom,
+            'download_url': url_for('static', filename=f'fiches/{fiche_filename}')
+        })
+
+    except Exception as e:
+        print(f"❌ Erreur lors de la génération de la fiche: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+def generer_fiche_via_api(texte):
+    """Génère une fiche résumé à partir du texte extrait en utilisant l'API configurée"""
+
+    print(f"🔍 Génération de fiche résumé avec {API_PROVIDER}")
+
+    # Formatter le prompt
+    prompt = FICHE_RESUME_PROMPT_TEMPLATE.format(texte=texte[:8000])
+
+    try:
+        if API_PROVIDER == 'claude':
+            from anthropic import Anthropic
+
+            if ANTHROPIC_API_KEY == 'votre-cle-api-claude-ici':
+                print("⚠️  Clé API Claude non configurée - Génération d'une fiche d'exemple")
+                return "# Fiche Résumé - Mode Test\n\nCeci est une fiche d'exemple générée en mode test.\n\n## Note\nConfigurez votre clé API dans config.py pour générer de vraies fiches."
+
+            print(f"📡 Appel API Claude ({MODELS['claude']})")
+            client = Anthropic(api_key=ANTHROPIC_API_KEY)
+            response = client.messages.create(
+                model=MODELS['claude'],
+                max_tokens=4000,
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }]
+            )
+            fiche_content = response.content[0].text
+            print(f"✅ Fiche générée ({len(fiche_content)} caractères)")
+            return fiche_content
+
+        elif API_PROVIDER == 'gemini':
+            import google.generativeai as genai
+
+            if GOOGLE_API_KEY == 'votre-cle-api-gemini-ici':
+                print("⚠️  Clé API Gemini non configurée - Génération d'une fiche d'exemple")
+                return "# Fiche Résumé - Mode Test\n\nCeci est une fiche d'exemple générée en mode test.\n\n## Note\nConfigurez votre clé API dans config.py pour générer de vraies fiches."
+
+            print(f"📡 Appel API Gemini ({MODELS['gemini']})")
+            genai.configure(api_key=GOOGLE_API_KEY)
+            model = genai.GenerativeModel(MODELS['gemini'])
+            response = model.generate_content(prompt)
+            fiche_content = response.text
+            print(f"✅ Fiche générée ({len(fiche_content)} caractères)")
+            return fiche_content
+
+        elif API_PROVIDER == 'openai':
+            from openai import OpenAI
+
+            if OPENAI_API_KEY == 'votre-cle-api-openai-ici':
+                print("⚠️  Clé API OpenAI non configurée - Génération d'une fiche d'exemple")
+                return "# Fiche Résumé - Mode Test\n\nCeci est une fiche d'exemple générée en mode test.\n\n## Note\nConfigurez votre clé API dans config.py pour générer de vraies fiches."
+
+            print(f"📡 Appel API OpenAI ({MODELS['openai']})")
+            client = OpenAI(api_key=OPENAI_API_KEY)
+            response = client.chat.completions.create(
+                model=MODELS['openai'],
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }],
+                max_tokens=4000
+            )
+            fiche_content = response.choices[0].message.content
+            print(f"✅ Fiche générée ({len(fiche_content)} caractères)")
+            return fiche_content
+
+        else:
+            print(f"❌ Provider inconnu: {API_PROVIDER}")
+            return None
+
+    except Exception as e:
+        print(f"❌ Erreur API: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 
 if __name__ == '__main__':
