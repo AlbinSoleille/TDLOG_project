@@ -254,6 +254,34 @@
                     >
                 </div>
 
+                <div class="divider">
+                    <span>Question de sécurité</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Question de sécurité</label>
+                    <select name="security_question" class="form-input" required>
+                        <option value="">Choisissez une question</option>
+                        {% for question in security_questions %}
+                        <option value="{{ question }}">{{ question }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Réponse</label>
+                    <input
+                        type="text"
+                        name="security_answer"
+                        class="form-input"
+                        placeholder="Votre réponse (pour récupérer votre mot de passe)"
+                        required
+                    >
+                    <small style="color: var(--text-secondary); font-size: 0.75rem; display: block; margin-top: 4px;">
+                        Cette réponse vous permettra de récupérer votre mot de passe si vous l'oubliez
+                    </small>
+                </div>
+
                 <button type="submit" class="btn btn-primary">
                     Créer mon compte
                 </button>

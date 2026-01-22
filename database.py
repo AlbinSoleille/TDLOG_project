@@ -169,13 +169,13 @@ def init_database():
 
 # --- FONCTIONS POUR LES UTILISATEURS ---
 
-def create_user(username, password_hash):
-    """Crée un nouvel utilisateur"""
+def create_user(username, password_hash, security_question=None, security_answer_hash=None):
+    """Crée un nouvel utilisateur avec question de sécurité optionnelle"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            'INSERT INTO users (username, password_hash) VALUES (?, ?)',
-            (username, password_hash)
+            'INSERT INTO users (username, password_hash, security_question, security_answer_hash) VALUES (?, ?, ?, ?)',
+            (username, password_hash, security_question, security_answer_hash)
         )
         return cursor.lastrowid
 
@@ -194,6 +194,38 @@ def get_all_users():
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM users')
         return cursor.fetchall()
+
+
+def get_user_security_question(username):
+    """Récupère la question de sécurité d'un utilisateur"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT security_question FROM users WHERE username = ?', (username,))
+        result = cursor.fetchone()
+        return result['security_question'] if result else None
+
+
+def verify_security_answer(username, answer):
+    """Vérifie la réponse à la question de sécurité"""
+    from werkzeug.security import check_password_hash
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT security_answer_hash FROM users WHERE username = ?', (username,))
+        result = cursor.fetchone()
+        if result and result['security_answer_hash']:
+            return check_password_hash(result['security_answer_hash'], answer)
+        return False
+
+
+def update_user_password(username, new_password_hash):
+    """Met à jour le mot de passe d'un utilisateur"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            'UPDATE users SET password_hash = ? WHERE username = ?',
+            (new_password_hash, username)
+        )
 
 
 # --- FONCTIONS POUR LES DECKS ---
