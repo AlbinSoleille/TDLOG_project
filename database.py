@@ -42,24 +42,31 @@ def init_database():
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Table des utilisateurs
+        # Table des utilisateurs (avec colonnes de sécurité et streaks)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
+                security_question TEXT,
+                security_answer_hash TEXT,
+                streak_count INTEGER DEFAULT 0,
+                last_streak_date DATE,
+                show_in_leaderboard INTEGER DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
 
-        # Table des decks de flashcards
+        # Table des decks de flashcards (avec dossiers)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS decks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 user_id INTEGER,
+                folder_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE SET NULL
             )
         ''')
 
@@ -76,13 +83,18 @@ def init_database():
             )
         ''')
 
-        # Table de progression des utilisateurs
+        # Table de progression des utilisateurs (système Anki SM-2)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS user_progress (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
                 flashcard_id INTEGER NOT NULL,
-                score INTEGER DEFAULT 0,
+                ease_factor REAL DEFAULT 2.5,
+                interval INTEGER DEFAULT 0,
+                due_date TEXT,
+                step INTEGER DEFAULT 0,
+                is_learning INTEGER DEFAULT 1,
+                repetitions INTEGER DEFAULT 0,
                 last_reviewed TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (flashcard_id) REFERENCES flashcards(id) ON DELETE CASCADE,
@@ -164,7 +176,144 @@ def init_database():
             ON daily_activity(date)
         ''')
 
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_decks_folder
+            ON decks(folder_id)
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_users_leaderboard
+            ON users(show_in_leaderboard)
+        ''')
+
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_progress_due
+            ON user_progress(due_date)
+        ''')
+
         print("✅ Base de données initialisée avec succès")
+
+
+def run_migrations():
+    """
+    Exécute les migrations pour mettre à jour une base de données existante.
+    Cette fonction ajoute les colonnes manquantes aux tables existantes.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        print("🔄 Vérification des migrations...")
+
+        # --- Migration: Colonnes de sécurité pour users ---
+        cursor.execute("PRAGMA table_info(users)")
+        user_columns = [col[1] for col in cursor.fetchall()]
+
+        if 'security_question' not in user_columns:
+            cursor.execute('ALTER TABLE users ADD COLUMN security_question TEXT')
+            print("  ✅ Colonne 'security_question' ajoutée à users")
+
+        if 'security_answer_hash' not in user_columns:
+            cursor.execute('ALTER TABLE users ADD COLUMN security_answer_hash TEXT')
+            print("  ✅ Colonne 'security_answer_hash' ajoutée à users")
+
+        if 'streak_count' not in user_columns:
+            cursor.execute('ALTER TABLE users ADD COLUMN streak_count INTEGER DEFAULT 0')
+            print("  ✅ Colonne 'streak_count' ajoutée à users")
+
+        if 'last_streak_date' not in user_columns:
+            cursor.execute('ALTER TABLE users ADD COLUMN last_streak_date DATE')
+            print("  ✅ Colonne 'last_streak_date' ajoutée à users")
+
+        if 'show_in_leaderboard' not in user_columns:
+            cursor.execute('ALTER TABLE users ADD COLUMN show_in_leaderboard INTEGER DEFAULT 1')
+            print("  ✅ Colonne 'show_in_leaderboard' ajoutée à users")
+
+        # --- Migration: Colonne user_id et folder_id pour decks ---
+        cursor.execute("PRAGMA table_info(decks)")
+        deck_columns = [col[1] for col in cursor.fetchall()]
+
+        if 'user_id' not in deck_columns:
+            cursor.execute('ALTER TABLE decks ADD COLUMN user_id INTEGER')
+            print("  ✅ Colonne 'user_id' ajoutée à decks")
+
+        if 'folder_id' not in deck_columns:
+            cursor.execute('ALTER TABLE decks ADD COLUMN folder_id INTEGER')
+            print("  ✅ Colonne 'folder_id' ajoutée à decks")
+
+        # --- Migration: Colonnes Anki pour user_progress ---
+        cursor.execute("PRAGMA table_info(user_progress)")
+        progress_columns = [col[1] for col in cursor.fetchall()]
+
+        anki_columns = {
+            'ease_factor': 'REAL DEFAULT 2.5',
+            'interval': 'INTEGER DEFAULT 0',
+            'due_date': 'TEXT',
+            'step': 'INTEGER DEFAULT 0',
+            'is_learning': 'INTEGER DEFAULT 1',
+            'repetitions': 'INTEGER DEFAULT 0'
+        }
+
+        for col_name, col_type in anki_columns.items():
+            if col_name not in progress_columns:
+                cursor.execute(f'ALTER TABLE user_progress ADD COLUMN {col_name} {col_type}')
+                print(f"  ✅ Colonne '{col_name}' ajoutée à user_progress")
+
+        # Initialiser les valeurs Anki pour les enregistrements existants
+        cursor.execute('''
+            UPDATE user_progress
+            SET ease_factor = 2.5,
+                interval = 0,
+                due_date = datetime('now'),
+                step = 0,
+                is_learning = 1,
+                repetitions = 0
+            WHERE ease_factor IS NULL
+        ''')
+
+        # Supprimer l'ancienne colonne score si elle existe (migration Anki)
+        if 'score' in progress_columns:
+            print("  ℹ️  Ancienne colonne 'score' détectée (les nouvelles colonnes Anki sont utilisées)")
+
+        # --- Création de la table folders si elle n'existe pas ---
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS folders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                parent_id INTEGER,
+                user_id INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (parent_id) REFERENCES folders(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        ''')
+
+        # --- Création de la table daily_activity si elle n'existe pas ---
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS daily_activity (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                date DATE NOT NULL,
+                cards_reviewed INTEGER DEFAULT 0,
+                cards_due_completed INTEGER DEFAULT 0,
+                all_cards_completed INTEGER DEFAULT 0,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE(user_id, date)
+            )
+        ''')
+
+        # --- Création des index ---
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_flashcards_deck ON flashcards(deck_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_progress_user ON user_progress(user_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_progress_flashcard ON user_progress(flashcard_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_progress_due ON user_progress(due_date)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_folders_user ON folders(user_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_decks_folder ON decks(folder_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_daily_activity_user ON daily_activity(user_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_daily_activity_date ON daily_activity(date)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_leaderboard ON users(show_in_leaderboard)')
+
+        print("✅ Migrations terminées avec succès")
 
 
 # --- FONCTIONS POUR LES UTILISATEURS ---
@@ -930,4 +1079,6 @@ def get_show_in_leaderboard(user_id):
 if __name__ == '__main__':
     # Initialiser la base de données
     init_database()
-    print("✅ Base de données créée avec succès!")
+    # Exécuter les migrations pour les bases existantes
+    run_migrations()
+    print("✅ Base de données configurée avec succès!")
