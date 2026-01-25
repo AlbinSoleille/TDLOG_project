@@ -267,6 +267,11 @@ NE PAS répéter ou paraphraser ces questions existantes!"""
             print(f"❌ Aucune flashcard extraite. Contenu reçu:\n{contenu[:500]}")
             return None, "Aucune flashcard n'a pu être extraite. Format de réponse incorrect."
 
+        # Limiter au nombre de flashcards demandé
+        if len(flashcards) > nb_flashcards:
+            print(f"⚠️  L'API a généré {len(flashcards)} flashcards, limitation à {nb_flashcards}")
+            flashcards = flashcards[:nb_flashcards]
+
         print(f"✅ {len(flashcards)} flashcards générées avec succès")
         return flashcards, None
 
