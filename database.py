@@ -380,24 +380,31 @@ def update_user_password(username, new_password_hash):
 # --- FONCTIONS POUR LES DECKS ---
 
 def create_deck(name, user_id=None):
-    """Crée un nouveau deck pour un utilisateur"""
+    """Crée un nouveau deck pour un utilisateur ou retourne l'existant"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
+
+        # D'abord vérifier si le deck existe déjà pour cet utilisateur
+        if user_id:
+            cursor.execute('SELECT id FROM decks WHERE name = ? AND user_id = ?', (name, user_id))
+        else:
+            cursor.execute('SELECT id FROM decks WHERE name = ?', (name,))
+        result = cursor.fetchone()
+        if result:
+            return result[0]
+
+        # Le deck n'existe pas, essayer de le créer
         try:
             cursor.execute('INSERT INTO decks (name, user_id) VALUES (?, ?)', (name, user_id))
             return cursor.lastrowid
         except sqlite3.IntegrityError:
-            # Le deck existe déjà, vérifier s'il appartient à cet utilisateur
-            if user_id:
-                cursor.execute('SELECT id FROM decks WHERE name = ? AND user_id = ?', (name, user_id))
-            else:
-                cursor.execute('SELECT id FROM decks WHERE name = ?', (name,))
-            result = cursor.fetchone()
-            if result:
-                return result[0]
-            # Si le deck existe mais appartient à un autre utilisateur, créer un nom unique
-            cursor.execute('INSERT INTO decks (name, user_id) VALUES (?, ?)',
-                         (f"{name}_{user_id}", user_id))
+            # Le nom existe pour un autre utilisateur, créer un nom unique
+            unique_name = f"{name}_{user_id}"
+            cursor.execute('SELECT id FROM decks WHERE name = ?', (unique_name,))
+            existing = cursor.fetchone()
+            if existing:
+                return existing[0]
+            cursor.execute('INSERT INTO decks (name, user_id) VALUES (?, ?)', (unique_name, user_id))
             return cursor.lastrowid
 
 
