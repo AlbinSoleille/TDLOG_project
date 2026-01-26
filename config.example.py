@@ -31,7 +31,7 @@ OPENAI_API_KEY = 'votre-cle-api-openai-ici'
 # === PARAMÈTRES DE GÉNÉRATION ===
 # Modèles à utiliser pour chaque provider
 MODELS = {
-    'claude': 'claude-3-5-haiku-20241022',  # Rapide et pas cher
+    'claude': 'claude-3-haiku-20240307',  # Rapide et pas cher
     'gemini': 'gemini-2.0-flash',  # Gratuit jusqu'à un certain quota
     'openai': 'gpt-4o-mini'  # Version économique d'OpenAI
 }
