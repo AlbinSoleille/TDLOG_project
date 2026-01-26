@@ -32,6 +32,6 @@ OPENAI_API_KEY = 'votre-cle-api-openai-ici'
 # Modèles à utiliser pour chaque provider
 MODELS = {
     'claude': 'claude-3-5-haiku-20241022',  # Rapide et pas cher
-    'gemini': 'gemini-1.5-flash',  # Gratuit jusqu'à un certain quota
+    'gemini': 'gemini-2.0-flash',  # Gratuit jusqu'à un certain quota
     'openai': 'gpt-4o-mini'  # Version économique d'OpenAI
 }
