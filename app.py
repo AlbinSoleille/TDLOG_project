@@ -190,13 +190,16 @@ NE PAS répéter ou paraphraser ces questions existantes!"""
         if API_PROVIDER == 'claude':
             # Utiliser l'API Claude (Anthropic)
             from anthropic import Anthropic
+            import httpx
 
             if ANTHROPIC_API_KEY == 'votre-cle-api-claude-ici':
                 print("⚠️  Clé API Claude non configurée - Génération de flashcards d'exemple")
                 return generer_flashcards_exemple(nb_flashcards), None
 
             print(f"📡 Appel API Claude ({MODELS['claude']}) - max_tokens: {max_tokens}")
-            client = Anthropic(api_key=ANTHROPIC_API_KEY)
+            # Créer un client httpx sans proxy pour éviter le bug 'proxies'
+            http_client = httpx.Client()
+            client = Anthropic(api_key=ANTHROPIC_API_KEY, http_client=http_client)
             response = client.messages.create(
                 model=MODELS['claude'],
                 max_tokens=max_tokens,
@@ -1488,13 +1491,16 @@ def generer_fiche_via_api(texte):
     try:
         if API_PROVIDER == 'claude':
             from anthropic import Anthropic
+            import httpx
 
             if ANTHROPIC_API_KEY == 'votre-cle-api-claude-ici':
                 print("⚠️  Clé API Claude non configurée - Génération d'une fiche d'exemple")
                 return "# Fiche Résumé - Mode Test\n\nCeci est une fiche d'exemple générée en mode test.\n\n## Note\nConfigurez votre clé API dans config.py pour générer de vraies fiches."
 
             print(f"📡 Appel API Claude ({MODELS['claude']})")
-            client = Anthropic(api_key=ANTHROPIC_API_KEY)
+            # Créer un client httpx sans proxy pour éviter le bug 'proxies'
+            http_client = httpx.Client()
+            client = Anthropic(api_key=ANTHROPIC_API_KEY, http_client=http_client)
             response = client.messages.create(
                 model=MODELS['claude'],
                 max_tokens=4000,
