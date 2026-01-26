@@ -161,10 +161,10 @@ def generer_flashcards_via_api(texte, nb_flashcards=10, prompt_template=None, ex
     max_chars = min(8000 + (nb_flashcards * 100), 50000)
 
     # Formatter le prompt avec les variables
-    prompt = prompt_template.format(
-        nb_flashcards=nb_flashcards,
-        texte=texte[:max_chars]
-    )
+    # Utiliser replace() au lieu de format() pour éviter les erreurs
+    # si le prompt contient des accolades (ex: LaTeX, JSON, etc.)
+    prompt = prompt_template.replace('{nb_flashcards}', str(nb_flashcards))
+    prompt = prompt.replace('{texte}', texte[:max_chars])
 
     # Si des questions existent déjà, ajouter une instruction pour éviter les doublons
     if existing_questions and len(existing_questions) > 0:
